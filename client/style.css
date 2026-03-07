@@ -921,6 +921,34 @@ input[type="text"]:focus {
     transform: translateX(-50%) translateY(0);
 }
 
+/* --- Sound Toggle --- */
+.sound-toggle {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--bg-medium);
+    border: 2px solid var(--border);
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px var(--shadow);
+}
+.sound-toggle:hover {
+    background: var(--bg-light);
+    transform: scale(1.1);
+}
+.sound-toggle.muted {
+    opacity: 0.6;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
     .card { width: 80px; min-height: 110px; }

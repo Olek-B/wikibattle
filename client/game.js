@@ -132,7 +132,14 @@ async function pollGameState() {
         }
 
         const prevStatus = gameState?.status;
+        const prevTurn = gameState?.turn;
         gameState = data.state;
+
+        // Play turn start sound when it's our turn
+        if (gameState.status === 'active' && gameState.is_your_turn && 
+            (!prevTurn || gameState.turn !== prevTurn)) {
+            SoundManager.play('turn_start');
+        }
 
         // Handle screen transitions
         if (gameState.status === 'waiting') {
@@ -428,19 +435,24 @@ function handleCardClick(card, location, idx) {
         const c = gameState.you.hand[idx];
         if (c.card_type === 'terrain') {
             // Terrains play directly
+            SoundManager.play('terrain_play');
             doAction('play_card', {hand_idx: idx});
         } else if (c.card_type === 'spell') {
             // Check if spell needs a target
             if (needsTarget(c)) {
+                SoundManager.play('spell_play');
                 enterTargetingMode('play_card', {hand_idx: idx}, 'Select a target for ' + c.name);
             } else {
+                SoundManager.play('spell_play');
                 doAction('play_card', {hand_idx: idx});
             }
         } else if (c.card_type === 'creature') {
             // Check if creature has targetable on_play effects
             if (needsTarget(c)) {
+                SoundManager.play('creature_play');
                 enterTargetingMode('play_card', {hand_idx: idx}, 'Select a target for ' + c.name);
             } else {
+                SoundManager.play('creature_play');
                 doAction('play_card', {hand_idx: idx});
             }
         }
@@ -449,6 +461,7 @@ function handleCardClick(card, location, idx) {
         if (selectedCard && selectedCard.type === 'field' && selectedCard.idx === idx) {
             deselectCard();
         } else if (card.can_attack && !card.is_tapped) {
+            SoundManager.play('select');
             selectCard('field', idx);
         }
     } else if (location === 'opp-field') {
@@ -486,12 +499,14 @@ function enterTargetingMode(action, params, promptText) {
     targetingMode = {action, params};
     document.getElementById('target-overlay').classList.remove('hidden');
     document.getElementById('target-prompt-text').textContent = promptText;
+    SoundManager.play('select');
     renderGame();
 }
 
 function cancelTargeting() {
     targetingMode = null;
     document.getElementById('target-overlay').classList.add('hidden');
+    SoundManager.play('cancel');
     renderGame();
 }
 
@@ -532,6 +547,7 @@ async function doAction(action, params = {}) {
 
 function attackPlayer() {
     if (!selectedCard || selectedCard.type !== 'field') return;
+    SoundManager.play('attack_player');
     doAction('attack', {
         attacker_idx: selectedCard.idx,
         target: 'player',
@@ -549,6 +565,7 @@ async function tapAllTerrains() {
 
 async function endTurn() {
     selectedCard = null;
+    SoundManager.play('turn_end');
     await doAction('end_turn', {});
 }
 
@@ -669,7 +686,13 @@ function renderLog(log, logTotal) {
 
     // Use total log length from server for change detection (not truncated array length)
     const totalLen = logTotal || log.length;
-    if (totalLen === lastLogLength) return;
+    
+    // Play sounds for new log entries
+    if (totalLen > lastLogLength && lastLogLength > 0) {
+        const newEntries = log.slice(-(totalLen - lastLogLength));
+        playSoundsForLogEntries(newEntries);
+    }
+    
     lastLogLength = totalLen;
 
     content.innerHTML = log.map(entry => {
@@ -678,6 +701,71 @@ function renderLog(log, logTotal) {
     }).join('');
 
     content.scrollTop = content.scrollHeight;
+}
+
+function playSoundsForLogEntries(entries) {
+    if (!SoundManager.enabled) return;
+    
+    // Delay sounds slightly to match visual update
+    setTimeout(() => {
+        entries.forEach(entry => {
+            const lowerEntry = entry.toLowerCase();
+            
+            // Combat sounds
+            if (lowerEntry.includes('attacks') && lowerEntry.includes('for')) {
+                if (lowerEntry.includes('battle')) {
+                    SoundManager.play('attack_creature');
+                } else {
+                    SoundManager.play('attack_player');
+                }
+            }
+            
+            // Effect sounds based on keywords
+            if (lowerEntry.includes('destroyed') || lowerEntry.includes('fallen')) {
+                SoundManager.play('creature_death');
+            }
+            
+            if (lowerEntry.includes('heal')) {
+                SoundManager.play('heal');
+            }
+            
+            if (lowerEntry.includes('draw')) {
+                SoundManager.play('draw_card');
+            }
+            
+            if (lowerEntry.includes('discard')) {
+                SoundManager.play('discard');
+            }
+            
+            if (lowerEntry.includes('gain') || lowerEntry.includes('gains')) {
+                SoundManager.play('buff');
+            }
+            
+            if (lowerEntry.includes('reduces') || lowerEntry.includes('drain')) {
+                SoundManager.play('debuff');
+            }
+            
+            if (lowerEntry.includes('lightning')) {
+                SoundManager.play('lightning');
+            }
+            
+            if (lowerEntry.includes('fire') || lowerEntry.includes('flame') || lowerEntry.includes('burn')) {
+                SoundManager.play('fire');
+            }
+            
+            if (lowerEntry.includes('freeze') || lowerEntry.includes('ice')) {
+                SoundManager.play('ice');
+            }
+            
+            if (lowerEntry.includes('earth') || lowerEntry.includes('earthquake')) {
+                SoundManager.play('earth');
+            }
+            
+            if (lowerEntry.includes('arcane') || lowerEntry.includes('magic') || lowerEntry.includes('mystical')) {
+                SoundManager.play('arcane');
+            }
+        });
+    }, 50);
 }
 
 function toggleLog() {
@@ -700,9 +788,11 @@ function renderGameOver() {
     } else if (gameState.winner === gameState.your_idx) {
         title.textContent = 'VICTORY!';
         msg.textContent = 'You have won the WikiBattle!';
+        SoundManager.play('victory');
     } else {
         title.textContent = 'DEFEAT';
         msg.textContent = 'You have been defeated in WikiBattle.';
+        SoundManager.play('defeat');
     }
 }
 
@@ -809,8 +899,26 @@ function formatEffectsForDetail(effects) {
 
 // --- Init ---
 
+// Sound toggle function
+function toggleSound() {
+    const btn = document.getElementById('btn-sound-toggle');
+    const enabled = SoundManager.toggle();
+    btn.textContent = enabled ? '🔊' : '🔇';
+    btn.classList.toggle('muted', !enabled);
+    
+    // Initialize audio on first toggle
+    if (enabled && !SoundManager.audioContext) {
+        SoundManager.init();
+    }
+    
+    showToast(enabled ? 'Sound effects enabled' : 'Sound effects muted');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     refreshGames();
+    
+    // Initialize sound manager on first interaction
+    SoundManager.init();
 
     // Click outside cards to deselect
     document.addEventListener('click', (e) => {
@@ -834,6 +942,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (e.key === 't' || e.key === 'T') {
             if (gameState && gameState.is_your_turn) tapAllTerrains();
+        }
+        if (e.key === 'm' || e.key === 'M') {
+            toggleSound();
         }
     });
 });
