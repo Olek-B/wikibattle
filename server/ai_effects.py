@@ -156,6 +156,8 @@ def _build_prompt_for_card(card: dict) -> str:
         else:
             extract = extract[:500] + "..."
 
+    has_image = bool(card.get("image"))
+
     type_instructions = ""
     if card_type == "creature":
         # Suggest random stats to break AI stat-clustering patterns
@@ -163,12 +165,17 @@ def _build_prompt_for_card(card: dict) -> str:
         hp_hint = _rng.randint(1, 8)
         cost_hint = max(1, min(6, (atk_hint + hp_hint) // 3))
 
+        if has_image:
+            stats_note = "This card has a visible image - it MUST have at least 1 effect, even with high stats."
+        else:
+            stats_note = "Low stats = stronger effects. High stats = weaker/no effects."
+
         type_instructions = (
             f"CREATURE - return JSON with:\n"
             f"attack: 1-7 (suggest ~{atk_hint}), health: 1-8 (suggest ~{hp_hint}), "
             f"mana_cost: 1-6 (suggest ~{cost_hint})\n"
             f"Stats should match the subject! insect=1/1, scholar=2/3, soldier=4/4, knight=5/5, dragon=6/7, war god=7/8\n"
-            f"Low stats = stronger effects. High stats = weaker/no effects.\n"
+            f"{stats_note}\n"
             f"abilities: 0-2 from [flying, shield, taunt, stealth, lifesteal, deathtouch, haste, ward] - match to subject\n"
             f"effect_description: 1-2 sentence flavor text\n"
             f"effects: 1-3 objects, each with trigger (on_play/on_death/on_attack/on_damaged/on_turn_start/on_turn_end/on_enemy_play/passive), type, params\n"
@@ -176,13 +183,21 @@ def _build_prompt_for_card(card: dict) -> str:
         )
 
     elif card_type == "terrain":
+        if has_image:
+            effects_note = (
+                "effects: 1-2 BONUS effects (not base mana). This card has a visible image so it MUST have at least 1 effect."
+            )
+        else:
+            effects_note = (
+                "effects: 0-2 BONUS effects (not base mana). Boring places can have 0 effects."
+            )
+
         type_instructions = (
             "TERRAIN - return JSON with:\n"
             "mana_cost: 0, mana_production: 1\n"
             "effect_description: 1-2 sentence flavor text\n"
-            "effects: 0-2 BONUS effects (not base mana). Each has trigger (on_play/on_tap/on_turn_start/on_turn_end/passive/on_enemy_play), type, params\n"
-            "Match effects to the place! NOT just draw_cards. Consider: extra_mana, heal_on_tap, damage_on_tap, buff auras, freeze, summon_token, drain_mana.\n"
-            "Boring places can have 0 effects."
+            f"{effects_note} Each has trigger (on_play/on_tap/on_turn_start/on_turn_end/passive/on_enemy_play), type, params\n"
+            "Match effects to the place! NOT just draw_cards. Consider: extra_mana, heal_on_tap, damage_on_tap, buff auras, freeze, summon_token, drain_mana."
         )
 
     elif card_type == "spell":
@@ -318,7 +333,10 @@ def _apply_ai_effects(card: dict, data: dict) -> dict:
             "params": sanitized,
         })
 
-    card["effects"] = validated_effects if validated_effects else _default_effects(card["card_type"])
+    if validated_effects:
+        card["effects"] = validated_effects
+    else:
+        card["effects"] = _default_effects(card["card_type"], has_image=bool(card.get("image")))
     return card
 
 
@@ -327,6 +345,7 @@ def _fallback_effects(card: dict) -> dict:
     import random
 
     card["effects_generated"] = True
+    has_image = bool(card.get("image"))
 
     if card["card_type"] == "creature":
         attack = random.randint(1, 5)
@@ -338,13 +357,13 @@ def _fallback_effects(card: dict) -> dict:
         card["mana_cost"] = cost
         card["abilities"] = []
         card["effect_description"] = f"A {card['name']} appears on the battlefield!"
-        card["effects"] = _default_effects("creature")
+        card["effects"] = _default_effects("creature", has_image=has_image)
 
     elif card["card_type"] == "terrain":
         card["mana_cost"] = 0
         card["mana_production"] = 1
         card["effect_description"] = f"The land of {card['name']} provides mana."
-        card["effects"] = []  # Basic terrains can have no effects
+        card["effects"] = _default_effects("terrain", has_image=has_image)
 
     elif card["card_type"] == "spell":
         cost = random.randint(1, 4)
@@ -381,12 +400,41 @@ def _random_spell_fallback_effect() -> dict:
     return random.choice(_SPELL_FALLBACK_POOL).copy()
 
 
-def _default_effects(card_type: str) -> list[dict]:
-    """Simple default effects by card type."""
+# Pool of fallback effects for terrains that need at least one effect
+_TERRAIN_FALLBACK_POOL = [
+    {"trigger": "on_tap", "type": "heal_on_tap", "params": {"amount": 1}},
+    {"trigger": "on_tap", "type": "damage_on_tap", "params": {"amount": 1}},
+    {"trigger": "passive", "type": "extra_mana", "params": {}},
+    {"trigger": "on_play", "type": "draw_cards", "params": {"count": 1}},
+    {"trigger": "on_play", "type": "gain_mana", "params": {"amount": 1}},
+]
+
+# Pool of fallback effects for creatures that need at least one effect
+_CREATURE_FALLBACK_POOL = [
+    {"trigger": "on_play", "type": "draw_cards", "params": {"count": 1}},
+    {"trigger": "on_death", "type": "deal_damage", "params": {"target": "opponent", "amount": 2}},
+    {"trigger": "on_attack", "type": "buff_attack", "params": {"target": "self", "amount": 1}},
+    {"trigger": "on_play", "type": "shield", "params": {"target": "self", "amount": 2}},
+    {"trigger": "on_play", "type": "heal", "params": {"target": "self", "amount": 3}},
+    {"trigger": "on_death", "type": "summon_token", "params": {"attack": 1, "health": 1, "name": "Spirit"}},
+]
+
+
+def _default_effects(card_type: str, has_image: bool = False) -> list[dict]:
+    """Simple default effects by card type.
+
+    Cards with images always get at least one effect.
+    """
+    import random
     if card_type == "creature":
+        if has_image:
+            return [random.choice(_CREATURE_FALLBACK_POOL).copy()]
         return []  # Vanilla creature, just attack/health
     elif card_type == "spell":
         return [_random_spell_fallback_effect()]
+    elif card_type == "terrain":
+        if has_image:
+            return [random.choice(_TERRAIN_FALLBACK_POOL).copy()]
     return []
 
 

@@ -19,6 +19,21 @@ PERSON_KEYWORDS = [
     "philosophers", "mathematicians", "engineers", "generals",
     "admirals", "officers", "coaches", "footballers", "swimmers",
     "runners", "boxers", "wrestlers",
+    # Nationality-based person categories (very common on Wikipedia)
+    "american people", "british people", "french people", "german people",
+    "italian people", "spanish people", "russian people", "chinese people",
+    "japanese people", "indian people", "canadian people", "australian people",
+    "brazilian people", "mexican people", "dutch people", "swedish people",
+    "polish people", "irish people", "scottish people", "korean people",
+    "norwegian people", "danish people", "finnish people",
+    # Additional professions/roles
+    "sportspeople", "managers", "novelists", "poets", "journalists",
+    "lawyers", "professors", "nobel laureates", "recipients of",
+    "commanders", "people of", "comedians", "broadcasters",
+    "philanthropists", "explorers", "inventors", "entrepreneurs",
+    "physicians", "surgeons", "architects", "designers",
+    "olympic", "medalists", "champions", "competitors",
+    "women", "men",  # gendered category markers
 ]
 
 ANIMAL_KEYWORDS = [
@@ -52,6 +67,16 @@ PLACE_KEYWORDS = [
     "airports", "stations", "ports", "dams",
     "world heritage sites", "monuments", "landmarks",
     "coordinates on wikidata",
+    # Additional place categories
+    "census-designated places", "unincorporated communities",
+    "neighbourhoods", "neighborhoods", "suburbs", "communes",
+    "cantons", "territories", "capitals", "metropolitan areas",
+    "bays", "capes", "peninsulas", "plateaus", "glaciers",
+    "waterfalls", "caves", "reefs", "wetlands",
+    "protected areas", "archaeological sites", "historical sites",
+    "bodies of water", "tributaries", "headlands",
+    "national parks", "nature reserves", "heritage sites",
+    "located in", "geography", "places in",
 ]
 
 
@@ -231,10 +256,10 @@ def classify_article(article: dict) -> str:
     Returns one of: 'creature', 'terrain', 'spell'
 
     Logic:
-    - If it has coordinates -> terrain
-    - If categories match person/animal keywords -> creature
-    - If categories match event keywords -> spell
+    - If it has coordinates -> terrain (unless clearly a person)
+    - Score categories against person/animal, event, and place keywords
     - Fallback: use extract content heuristics
+    - Tiebreaker: creature > terrain > spell (most Wikipedia articles are about people)
     """
     categories = article.get("categories", [])
     cat_text = " ".join(categories)
@@ -244,7 +269,7 @@ def classify_article(article: dict) -> str:
     if article.get("coordinates"):
         # Unless they're clearly a person (some people articles have coords)
         person_score = sum(1 for kw in PERSON_KEYWORDS if kw in cat_text)
-        if person_score >= 2:
+        if person_score >= 1:
             return "creature"
         return "terrain"
 
@@ -258,15 +283,19 @@ def classify_article(article: dict) -> str:
     # Check for place (terrain)
     place_score = sum(1 for kw in PLACE_KEYWORDS if kw in cat_text)
 
-    scores = {
-        "creature": person_score + animal_score,
-        "spell": event_score,
-        "terrain": place_score,
-    }
+    creature_score = person_score + animal_score
 
-    best = max(scores, key=lambda k: scores[k])
-    if scores[best] > 0:
-        return best
+    # If any category matched, use scoring with tiebreaker
+    if creature_score > 0 or event_score > 0 or place_score > 0:
+        # Tiebreaker: creature > terrain > spell
+        # Use tuples so (score, priority) breaks ties deterministically
+        scored = [
+            (creature_score, 2, "creature"),
+            (place_score,    1, "terrain"),
+            (event_score,    0, "spell"),
+        ]
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return scored[0][2]
 
     # Fallback heuristics from extract text
     # Birth/death years pattern -> person
@@ -274,16 +303,33 @@ def classify_article(article: dict) -> str:
        re.search(r"\(born\s+\d", extract):
         return "creature"
 
-    # "is a" pattern with animal words
-    if re.search(r"is a (species|genus|family|breed|type of)", extract):
+    # "was a/an" or "is a/an" followed by a profession/role -> person
+    if re.search(r"(is|was) an? .{0,30}\b(politician|singer|actor|actress|writer|"
+                 r"player|musician|scientist|artist|poet|author|composer|director|"
+                 r"professor|lawyer|journalist|engineer|physician|architect|"
+                 r"footballer|athlete|soldier|general|admiral|monarch|emperor|"
+                 r"empress|king|queen|prince|princess|saint|prophet|philosopher|"
+                 r"explorer|inventor|entrepreneur|comedian|broadcaster)\b", extract):
+        return "creature"
+
+    # "is a" pattern with animal/biological words
+    if re.search(r"is a (species|genus|family|breed|type of|subspecies|order of)", extract):
         return "creature"
 
     # Location patterns
-    if re.search(r"is a (city|town|village|river|mountain|lake|island|country|region|municipality)", extract):
+    if re.search(r"is a (city|town|village|river|mountain|lake|island|country|"
+                 r"region|municipality|commune|neighborhood|neighbourhood|suburb|"
+                 r"census-designated place|unincorporated community|hamlet|"
+                 r"borough|district|province|state|territory|peninsula|"
+                 r"bay|cape|plateau|glacier|waterfall|cave|national park)", extract):
+        return "terrain"
+
+    # "located in" or "situated in" -> place
+    if re.search(r"(is |are )?(located|situated) in", extract):
         return "terrain"
 
     # Event patterns
-    if re.search(r"(took place|occurred|happened|was fought|broke out)", extract):
+    if re.search(r"(took place|occurred|happened|was fought|broke out|was signed|was held)", extract):
         return "spell"
 
     # Default: creature (most Wikipedia articles are about people)
