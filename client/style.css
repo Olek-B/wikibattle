@@ -1,0 +1,902 @@
+/* WikiBattle - Styles */
+
+/* --- Reset & Base --- */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --bg-dark: #1a1a2e;
+    --bg-medium: #16213e;
+    --bg-light: #0f3460;
+    --bg-card: #1e2a4a;
+    --accent: #e94560;
+    --accent-hover: #ff6b81;
+    --gold: #ffd700;
+    --mana-blue: #4da6ff;
+    --hp-green: #2ecc71;
+    --hp-red: #e74c3c;
+    --terrain-green: #27ae60;
+    --creature-red: #c0392b;
+    --spell-purple: #8e44ad;
+    --text-primary: #ecf0f1;
+    --text-secondary: #bdc3c7;
+    --text-muted: #7f8c8d;
+    --border: #2c3e50;
+    --shadow: rgba(0, 0, 0, 0.4);
+    --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    font-family: var(--font);
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* --- Screens --- */
+.screen {
+    display: none;
+    width: 100%;
+    min-height: 100vh;
+}
+.screen.active {
+    display: flex;
+}
+
+/* --- Lobby --- */
+#lobby {
+    justify-content: center;
+    align-items: center;
+}
+
+.lobby-container {
+    background: var(--bg-medium);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 480px;
+    width: 90%;
+    text-align: center;
+}
+
+.title {
+    font-size: 3rem;
+    color: var(--gold);
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+    margin-bottom: 0.25rem;
+    letter-spacing: 2px;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+}
+
+.lobby-section {
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.lobby-section label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+    border-color: var(--accent);
+}
+
+.lobby-actions {
+    margin-bottom: 1.5rem;
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 1rem 0;
+    color: var(--text-muted);
+}
+.divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border);
+}
+.divider span {
+    padding: 0 0.8rem;
+    font-size: 0.85rem;
+}
+
+.join-section {
+    display: flex;
+    gap: 0.5rem;
+}
+.join-section input {
+    flex: 1;
+    text-transform: uppercase;
+}
+
+/* --- Buttons --- */
+.btn {
+    padding: 0.7rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--shadow);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: white;
+    width: 100%;
+}
+.btn-primary:hover {
+    background: var(--accent-hover);
+}
+
+.btn-secondary {
+    background: var(--bg-light);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.btn-danger {
+    background: var(--hp-red);
+    color: white;
+}
+
+.btn-mana {
+    background: var(--mana-blue);
+    color: white;
+}
+.btn-mana:hover {
+    background: #5dade2;
+}
+
+.btn-small {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+}
+
+/* --- Waiting Room --- */
+.waiting-room {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: var(--bg-dark);
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+}
+
+.waiting-room strong {
+    color: var(--gold);
+    font-size: 1.5rem;
+    letter-spacing: 3px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* --- Spinner --- */
+.spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0.5rem auto;
+}
+.spinner.large {
+    width: 50px;
+    height: 50px;
+    border-width: 4px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* --- Error --- */
+.error {
+    color: var(--hp-red);
+    background: rgba(231, 76, 60, 0.1);
+    padding: 0.6rem;
+    border-radius: 6px;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.muted {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* --- Available Games --- */
+.available-games {
+    margin-top: 2rem;
+    text-align: left;
+}
+.available-games h3 {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+#games-list {
+    background: var(--bg-dark);
+    border-radius: 6px;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    max-height: 150px;
+    overflow-y: auto;
+}
+.game-listing {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+.game-listing:hover {
+    background: var(--bg-light);
+}
+.game-listing:last-child {
+    border-bottom: none;
+}
+
+/* --- Loading Screen --- */
+#loading {
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+.loading-container {
+    text-align: center;
+    max-width: 500px;
+}
+.loading-container h2 {
+    color: var(--gold);
+    margin-bottom: 1rem;
+}
+.loading-log {
+    margin-top: 1rem;
+    text-align: left;
+    background: var(--bg-medium);
+    border-radius: 8px;
+    padding: 1rem;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.loading-log p {
+    margin-bottom: 0.3rem;
+}
+
+/* --- Game Screen --- */
+#game {
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Top/Bottom bars */
+.top-bar, .bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    background: var(--bg-medium);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+}
+.bottom-bar {
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+}
+
+.player-info {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.player-name {
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.hp-bar {
+    position: relative;
+    width: 150px;
+    height: 22px;
+    background: var(--bg-dark);
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.hp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--hp-red), var(--hp-green));
+    border-radius: 11px;
+    transition: width 0.5s ease;
+    width: 100%;
+}
+.hp-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.stat-badge {
+    background: var(--bg-dark);
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+.mana-badge {
+    color: var(--mana-blue);
+    border-color: var(--mana-blue);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* --- Board --- */
+.board-half {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0.3rem 1rem;
+    min-height: 100px;
+}
+
+.opponent-half {
+    flex-direction: column;
+}
+.your-half {
+    flex-direction: column;
+}
+
+.creature-zone, .terrain-zone {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.3rem;
+    min-height: 80px;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.zone-label {
+    position: absolute;
+    top: 2px;
+    left: 8px;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.terrain-zone {
+    min-height: 55px;
+}
+
+.board-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.25rem;
+    background: var(--bg-light);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.turn-indicator {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--gold);
+}
+
+/* --- Hand --- */
+.hand-zone {
+    padding: 0.3rem 1rem;
+    background: var(--bg-medium);
+    border-top: 2px solid var(--accent);
+    min-height: 110px;
+    overflow-x: auto;
+}
+
+.hand {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 0.2rem;
+}
+
+/* --- Cards --- */
+.card {
+    width: 95px;
+    min-height: 130px;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px var(--shadow);
+    z-index: 5;
+}
+
+.card.creature { border-color: var(--creature-red); }
+.card.terrain { border-color: var(--terrain-green); }
+.card.spell { border-color: var(--spell-purple); }
+
+.card.tapped {
+    opacity: 0.6;
+    transform: rotate(5deg);
+}
+
+.card.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.card.disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.card.can-attack {
+    border-color: var(--gold);
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+.card.selected {
+    border-color: var(--gold);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+    transform: translateY(-8px);
+}
+
+.card.targetable {
+    border-color: var(--hp-red);
+    box-shadow: 0 0 10px rgba(231, 76, 60, 0.4);
+    animation: pulse-target 1s infinite;
+}
+
+@keyframes pulse-target {
+    0%, 100% { box-shadow: 0 0 10px rgba(231, 76, 60, 0.4); }
+    50% { box-shadow: 0 0 20px rgba(231, 76, 60, 0.7); }
+}
+
+.card-mana {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 22px;
+    height: 22px;
+    background: var(--mana-blue);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: white;
+    z-index: 2;
+}
+
+.card-image {
+    width: 100%;
+    height: 55px;
+    object-fit: cover;
+    background: var(--bg-dark);
+}
+
+.card-name {
+    padding: 2px 4px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.card-type-badge {
+    font-size: 0.5rem;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 1px 4px;
+    letter-spacing: 0.5px;
+}
+.card-type-badge.creature { color: var(--creature-red); }
+.card-type-badge.terrain { color: var(--terrain-green); }
+.card-type-badge.spell { color: var(--spell-purple); }
+
+.card-effect {
+    padding: 2px 4px;
+    font-size: 0.5rem;
+    color: var(--text-muted);
+    text-align: center;
+    flex: 1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.card-stats {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 6px 3px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.card-attack {
+    color: var(--hp-red);
+}
+.card-health {
+    color: var(--hp-green);
+}
+
+.card-mana-prod {
+    color: var(--mana-blue);
+    font-size: 0.65rem;
+    text-align: center;
+    padding: 1px;
+}
+
+/* Field cards are smaller */
+.field-card {
+    width: 80px;
+    min-height: 105px;
+}
+.field-card .card-image {
+    height: 40px;
+}
+.field-card .card-name {
+    font-size: 0.55rem;
+}
+
+/* Terrain cards are even smaller */
+.terrain-card {
+    width: 70px;
+    min-height: 55px;
+}
+.terrain-card .card-image {
+    height: 25px;
+}
+.terrain-card .card-name {
+    font-size: 0.5rem;
+    padding: 1px 2px;
+}
+.terrain-card .card-mana {
+    width: 18px;
+    height: 18px;
+    font-size: 0.6rem;
+}
+
+/* Not yet generated effects */
+.card.generating {
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* --- Game Log --- */
+.game-log {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    width: 300px;
+    max-height: 400px;
+    background: var(--bg-medium);
+    border: 1px solid var(--border);
+    border-radius: 8px 8px 0 0;
+    z-index: 20;
+    transition: max-height 0.3s;
+}
+.game-log.collapsed {
+    max-height: 32px;
+    overflow: hidden;
+}
+.log-header {
+    padding: 0.4rem 0.8rem;
+    background: var(--bg-light);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    border-radius: 8px 8px 0 0;
+}
+.log-content {
+    padding: 0.5rem;
+    max-height: 350px;
+    overflow-y: auto;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+.log-content p {
+    padding: 0.15rem 0;
+    border-bottom: 1px solid rgba(44, 62, 80, 0.3);
+}
+.log-content p:last-child {
+    border-bottom: none;
+}
+.log-entry-highlight {
+    color: var(--gold);
+    font-weight: 600;
+}
+
+/* --- Card Detail Overlay --- */
+.card-detail-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.card-detail-content {
+    background: var(--bg-medium);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    max-width: 400px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+.close-btn:hover {
+    color: var(--text-primary);
+}
+
+.detail-image {
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.detail-title {
+    font-size: 1.3rem;
+    color: var(--gold);
+    margin-bottom: 0.5rem;
+}
+
+.detail-type {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}
+.detail-type.creature { background: rgba(192, 57, 43, 0.2); color: var(--creature-red); }
+.detail-type.terrain { background: rgba(39, 174, 96, 0.2); color: var(--terrain-green); }
+.detail-type.spell { background: rgba(142, 68, 173, 0.2); color: var(--spell-purple); }
+
+.detail-stats {
+    display: flex;
+    gap: 1rem;
+    margin: 0.5rem 0;
+}
+.detail-stat {
+    padding: 0.3rem 0.6rem;
+    background: var(--bg-dark);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.detail-effect {
+    margin-top: 0.5rem;
+    padding: 0.8rem;
+    background: var(--bg-dark);
+    border-radius: 6px;
+    font-style: italic;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.detail-extract {
+    margin-top: 0.8rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.detail-wiki-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    color: var(--mana-blue);
+    text-decoration: none;
+    font-size: 0.8rem;
+}
+.detail-wiki-link:hover {
+    text-decoration: underline;
+}
+
+/* --- Target Overlay --- */
+.target-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 50;
+    pointer-events: none;
+}
+.target-prompt {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 700;
+    pointer-events: all;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    z-index: 51;
+}
+
+/* --- Game Over --- */
+#gameover {
+    justify-content: center;
+    align-items: center;
+}
+.gameover-container {
+    text-align: center;
+    background: var(--bg-medium);
+    padding: 3rem;
+    border-radius: 12px;
+    border: 2px solid var(--gold);
+}
+.gameover-container h1 {
+    font-size: 2.5rem;
+    color: var(--gold);
+    margin-bottom: 1rem;
+}
+.gameover-container p {
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+    color: var(--text-secondary);
+}
+
+/* --- Toast Notifications --- */
+.toast-notification {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100%);
+    background: var(--hp-red);
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+    max-width: 90%;
+    text-align: center;
+}
+.toast-notification.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .card { width: 80px; min-height: 110px; }
+    .card-image { height: 45px; }
+    .field-card { width: 70px; min-height: 90px; }
+    .field-card .card-image { height: 35px; }
+    .terrain-card { width: 60px; min-height: 50px; }
+    .hp-bar { width: 100px; }
+    .game-log { width: 250px; }
+    .player-info { font-size: 0.85rem; }
+    .title { font-size: 2rem; }
+    .bottom-bar { flex-direction: column; gap: 0.3rem; padding: 0.3rem 0.5rem; }
+    .top-bar { flex-direction: column; gap: 0.3rem; padding: 0.3rem 0.5rem; }
+}
+
+@media (max-width: 480px) {
+    .card { width: 70px; min-height: 100px; }
+    .card-image { height: 35px; }
+    .card-name { font-size: 0.5rem; }
+    .hand-zone { padding: 0.2rem 0.3rem; }
+    .board-half { padding: 0.2rem 0.3rem; }
+}

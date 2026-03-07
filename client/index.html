@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WikiBattle</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- LOBBY SCREEN -->
+    <div id="lobby" class="screen active">
+        <div class="lobby-container">
+            <h1 class="title">WikiBattle</h1>
+            <p class="subtitle">Wikipedia-Powered Card Combat</p>
+
+            <div class="lobby-section">
+                <label for="player-name">Your Name</label>
+                <input type="text" id="player-name" placeholder="Enter your name" maxlength="20" value="">
+            </div>
+
+            <div class="lobby-actions">
+                <button id="btn-create" class="btn btn-primary" onclick="createGame()">Create Game</button>
+
+                <div class="divider"><span>or</span></div>
+
+                <div class="join-section">
+                    <input type="text" id="game-code" placeholder="Game code" maxlength="8">
+                    <button id="btn-join" class="btn btn-secondary" onclick="joinGame()">Join Game</button>
+                </div>
+            </div>
+
+            <div id="waiting-room" class="waiting-room hidden">
+                <div class="spinner"></div>
+                <p>Game code: <strong id="display-code"></strong></p>
+                <p>Share this code with your opponent!</p>
+                <p id="waiting-status">Waiting for opponent...</p>
+            </div>
+
+            <div id="lobby-error" class="error hidden"></div>
+
+            <!-- Available games -->
+            <div class="available-games">
+                <h3>Open Games</h3>
+                <div id="games-list">
+                    <p class="muted">No games available</p>
+                </div>
+                <button class="btn btn-small" onclick="refreshGames()">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOADING SCREEN -->
+    <div id="loading" class="screen">
+        <div class="loading-container">
+            <h2>Generating Your Deck...</h2>
+            <div class="spinner large"></div>
+            <p>Fetching random Wikipedia articles and building cards...</p>
+            <div id="loading-log" class="loading-log"></div>
+        </div>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game" class="screen">
+        <!-- Top bar: opponent info -->
+        <div class="top-bar">
+            <div class="player-info opponent-info">
+                <span class="player-name" id="opp-name">Opponent</span>
+                <div class="hp-bar">
+                    <div class="hp-fill" id="opp-hp-fill"></div>
+                    <span class="hp-text" id="opp-hp-text">30</span>
+                </div>
+                <span class="stat-badge" id="opp-deck-count" title="Cards in deck">Deck: 0</span>
+                <span class="stat-badge" id="opp-hand-count" title="Cards in hand">Hand: 0</span>
+                <span class="stat-badge" id="opp-mana" title="Available mana">Mana: 0</span>
+            </div>
+        </div>
+
+        <!-- Opponent's field -->
+        <div class="board-half opponent-half">
+            <div class="terrain-zone" id="opp-terrains">
+                <div class="zone-label">Opponent's Terrains</div>
+            </div>
+            <div class="creature-zone" id="opp-field">
+                <div class="zone-label">Opponent's Creatures</div>
+            </div>
+        </div>
+
+        <!-- Center divider -->
+        <div class="board-divider">
+            <div id="turn-indicator" class="turn-indicator">Turn 1</div>
+            <button id="btn-attack-player" class="btn btn-danger btn-small hidden"
+                    onclick="attackPlayer()" title="Attack opponent directly">
+                Attack Player
+            </button>
+        </div>
+
+        <!-- Your field -->
+        <div class="board-half your-half">
+            <div class="creature-zone" id="your-field">
+                <div class="zone-label">Your Creatures</div>
+            </div>
+            <div class="terrain-zone" id="your-terrains">
+                <div class="zone-label">Your Terrains</div>
+            </div>
+        </div>
+
+        <!-- Your hand -->
+        <div class="hand-zone">
+            <div id="your-hand" class="hand"></div>
+        </div>
+
+        <!-- Bottom bar: your info + actions -->
+        <div class="bottom-bar">
+            <div class="player-info your-info">
+                <span class="player-name" id="your-name">You</span>
+                <div class="hp-bar">
+                    <div class="hp-fill" id="your-hp-fill"></div>
+                    <span class="hp-text" id="your-hp-text">30</span>
+                </div>
+                <span class="stat-badge mana-badge" id="your-mana" title="Available mana">Mana: 0</span>
+                <span class="stat-badge" id="your-deck-count" title="Cards in deck">Deck: 0</span>
+            </div>
+            <div class="action-buttons">
+                <button id="btn-tap-all" class="btn btn-mana" onclick="tapAllTerrains()" title="Tap all terrains for mana">
+                    Tap All Lands
+                </button>
+                <button id="btn-end-turn" class="btn btn-primary" onclick="endTurn()">
+                    End Turn
+                </button>
+            </div>
+        </div>
+
+        <!-- Game log -->
+        <div id="game-log" class="game-log">
+            <div class="log-header" onclick="toggleLog()">
+                Game Log <span id="log-toggle">&#9660;</span>
+            </div>
+            <div id="log-content" class="log-content"></div>
+        </div>
+
+        <!-- Card detail overlay -->
+        <div id="card-detail" class="card-detail-overlay hidden" onclick="closeCardDetail(event)">
+            <div class="card-detail-content" onclick="event.stopPropagation()">
+                <button class="close-btn" onclick="closeCardDetail()">&times;</button>
+                <div id="card-detail-body"></div>
+            </div>
+        </div>
+
+        <!-- Target selection overlay -->
+        <div id="target-overlay" class="target-overlay hidden">
+            <div class="target-prompt">
+                <p id="target-prompt-text">Select a target</p>
+                <button class="btn btn-small" onclick="cancelTargeting()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="gameover" class="screen">
+        <div class="gameover-container">
+            <h1 id="gameover-title">Game Over</h1>
+            <p id="gameover-message"></p>
+            <button class="btn btn-primary" onclick="backToLobby()">Back to Lobby</button>
+        </div>
+    </div>
+
+    <script src="/static/game.js"></script>
+</body>
+</html>
