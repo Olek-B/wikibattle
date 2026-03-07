@@ -96,6 +96,11 @@ RULES:
 - Each card should have 1-3 effects, each with a trigger
 - Be creative with the effect names and descriptions! The description should be a fun flavor text.
 - Terrains always produce 1 mana base. Their effects are EXTRA bonuses (on_tap, passive, on_play, etc.)
+- IMPORTANT: Do NOT default to deal_damage for every card! Use the FULL variety of effect types.
+  Spells especially should use diverse effects: draw_cards, bounce, freeze, steal_card, swap_hands,
+  buff/debuff, shield, resurrect, summon_token, chain_lightning, cascade, gamble, mutate, etc.
+  deal_damage should be used at MOST on 1 out of every 4 spell cards.
+- Combine multiple different effect types on a single card for interesting combos.
 
 You MUST respond with valid JSON only. No markdown, no explanation, just the JSON object."""
 
@@ -148,7 +153,12 @@ Each effect object has:
 - "type": the effect type string
 - "params": object with parameters for that effect type
 
-Spells should feel like the EVENT is happening on the battlefield."""
+Spells should feel like the EVENT is happening on the battlefield.
+AVOID making every spell just deal_damage! Use creative effects like:
+draw_cards, bounce, freeze, steal_card, swap_hands, destroy_creature,
+chain_lightning, cascade, gamble, mutate, shield, summon_token, life_drain,
+damage_all_enemies, resurrect, opponent_discard, time_warp, etc.
+Combine 2-3 different effects for interesting combos!"""
 
     available_effects = ", ".join(EFFECT_TYPES)
     available_triggers = ", ".join(TRIGGER_TYPES)

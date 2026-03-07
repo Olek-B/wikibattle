@@ -321,7 +321,12 @@ function createCardElement(card, location, idx, isMyTurn) {
     // Effect text
     const effectText = card.effect_description
         ? `<div class="card-effect">${escapeHtml(card.effect_description)}</div>`
-        : (card.effects_generated ? '' : '<div class="card-effect">Generating...</div>');
+        : (card.effects_generated ? '' : '<div class="card-effect generating-text">Generating...</div>');
+
+    // Mechanical effects breakdown
+    const mechanicalHtml = (card.effects && card.effects.length)
+        ? `<div class="card-effects-list">${formatEffectsForCard(card.effects)}</div>`
+        : '';
 
     el.innerHTML = `
         ${manaHtml}
@@ -329,6 +334,7 @@ function createCardElement(card, location, idx, isMyTurn) {
         <div class="card-name" title="${escapeHtml(card.name)}">${escapeHtml(card.name)}</div>
         <div class="card-type-badge ${card.card_type}">${card.card_type}</div>
         ${effectText}
+        ${mechanicalHtml}
         ${statsHtml}
     `;
 
@@ -365,10 +371,20 @@ function createTerrainElement(card, isMine, idx, isMyTurn) {
 
     const manaText = card.mana_production > 1 ? `${card.mana_production}` : '1';
 
+    // Terrain effect text
+    const terrainEffectHtml = card.effect_description
+        ? `<div class="card-effect">${escapeHtml(card.effect_description)}</div>`
+        : '';
+    const terrainMechanicalHtml = (card.effects && card.effects.length)
+        ? `<div class="card-effects-list">${formatEffectsForCard(card.effects)}</div>`
+        : '';
+
     el.innerHTML = `
         ${imgHtml}
         <div class="card-name" title="${escapeHtml(card.name)}">${escapeHtml(card.name)}</div>
         <div class="card-mana-prod" title="Mana production">${manaText}</div>
+        ${terrainEffectHtml}
+        ${terrainMechanicalHtml}
     `;
 
     // Click to tap for mana
@@ -610,6 +626,10 @@ function showCardDetail(card) {
         ? `<div class="detail-effect">"${escapeHtml(card.effect_description)}"</div>`
         : '';
 
+    const mechanicalDetailHtml = (card.effects && card.effects.length)
+        ? `<div class="detail-effects-list">${formatEffectsForDetail(card.effects)}</div>`
+        : '';
+
     const wikiLink = card.wiki_url
         ? `<a href="${card.wiki_url}" target="_blank" rel="noopener" class="detail-wiki-link">View on Wikipedia</a>`
         : '';
@@ -620,6 +640,7 @@ function showCardDetail(card) {
         <span class="detail-type ${card.card_type}">${card.card_type}</span>
         ${statsHtml}
         ${effectHtml}
+        ${mechanicalDetailHtml}
         <p class="detail-extract">${escapeHtml(card.extract || '')}</p>
         ${wikiLink}
     `;
@@ -722,6 +743,58 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+function formatEffectType(type) {
+    // Convert snake_case to readable: "deal_damage" -> "Deal Damage"
+    return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatEffectParams(params) {
+    if (!params) return '';
+    const parts = [];
+    if (params.amount != null) parts.push(`${params.amount}`);
+    if (params.count != null) parts.push(`${params.count}`);
+    if (params.target && params.target !== 'self') parts.push(`-> ${params.target.replace(/_/g, ' ')}`);
+    if (params.turns) parts.push(`${params.turns} turns`);
+    if (params.bounces) parts.push(`${params.bounces} bounces`);
+    if (params.name) parts.push(`"${params.name}"`);
+    return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
+function formatTrigger(trigger) {
+    const map = {
+        on_play: 'Play',
+        on_death: 'Death',
+        on_attack: 'Attack',
+        on_damaged: 'Damaged',
+        on_turn_start: 'Turn Start',
+        on_turn_end: 'Turn End',
+        on_enemy_play: 'Enemy Play',
+        passive: 'Passive',
+        on_tap: 'Tap',
+    };
+    return map[trigger] || trigger;
+}
+
+function formatEffectsForCard(effects) {
+    if (!effects || !effects.length) return '';
+    return effects.map(e => {
+        const trigger = formatTrigger(e.trigger);
+        const type = formatEffectType(e.type);
+        const params = formatEffectParams(e.params);
+        return `<span class="effect-trigger">[${trigger}]</span> ${type}${params}`;
+    }).join('<br>');
+}
+
+function formatEffectsForDetail(effects) {
+    if (!effects || !effects.length) return '';
+    return effects.map(e => {
+        const trigger = formatTrigger(e.trigger);
+        const type = formatEffectType(e.type);
+        const params = formatEffectParams(e.params);
+        return `<div class="detail-effect-line"><span class="effect-trigger">[${trigger}]</span> ${type}${params}</div>`;
+    }).join('');
 }
 
 // --- Init ---
