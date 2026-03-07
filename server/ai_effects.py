@@ -82,85 +82,59 @@ TRIGGER_TYPES = [
     "on_tap",        # When terrain is tapped for mana
 ]
 
-# Detailed effect reference the AI actually sees in the prompt
-EFFECT_REFERENCE = """
-EFFECT REFERENCE (type -> params -> what it does):
-
-DAMAGE & HEALING:
-  deal_damage: {target, amount} - Deal N damage to opponent or a creature
-  heal: {target, amount} - Heal player or creature by N
-  damage_all_enemies: {amount} - Deal N damage to ALL enemy creatures
-  damage_all: {amount} - Deal N damage to ALL creatures on both sides
-  life_drain: {amount} - Deal N damage to opponent AND heal yourself by N
-
-CARD MANIPULATION:
-  draw_cards: {count} - Draw N cards from your deck
-  opponent_discard: {count} - Force opponent to discard N random cards
-  steal_card: {} - Steal a random card from opponent's hand into yours
-  swap_hands: {} - Swap your entire hand with opponent's hand
-  resurrect: {} - Return a random creature from your graveyard to hand
-
-CREATURE STATS:
-  buff_attack: {target, amount} - Give +N attack to self or all friendly creatures
-  buff_health: {target, amount} - Give +N health to self or all friendly creatures
-  debuff_attack: {target, amount} - Give -N attack to target or all enemies
-  debuff_health: {target, amount} - Give -N health to target or all enemies
-  swap_stats: {target} - Swap a creature's attack and health values
-  set_attack: {target, amount} - Set a creature's attack to exactly N
-  set_health: {target, amount} - Set a creature's health to exactly N
-
-BOARD CONTROL:
-  destroy_creature: {target} - Instantly destroy a creature (target/random_enemy/weakest_enemy)
-  destroy_terrain: {} - Destroy one of opponent's terrains (random)
-  bounce: {target} - Return a creature to its owner's hand (target/random_enemy)
-  freeze: {target, turns} - Freeze creature(s) so they can't attack for N turns
-  shield: {target, amount} - Give N shield points that absorb damage before health
-  taunt: {target} - This creature must be attacked before others
-
-MANA:
-  gain_mana: {amount} - Gain N bonus mana this turn
-  drain_mana: {amount} - Opponent loses N mana
-  untap_terrains: {count} - Untap N of your terrains so you can tap them again
-
-CHAOS:
-  random_effect: {} - Trigger a completely random effect (anything can happen!)
-  cascade: {} - Reveal top card of deck, play it free if its cost <= this card's cost
-  mutate: {target} - Randomize a creature's attack and health to new random values
-  time_warp: {} - Take an EXTRA TURN after this one (very powerful, use rarely)
-  mirror: {} - Copy whatever effect your opponent played last
-  gamble: {win_effect, lose_effect} - 50/50 coin flip: win_effect or lose_effect happens
-  chain_lightning: {amount, bounces} - Deal N damage, then bounce to N random targets
-  summon_token: {attack, health, name} - Create a creature token with given stats and name
-
-TERRAIN BONUSES:
-  extra_mana: {} - This terrain produces 2 mana instead of 1
-  heal_on_tap: {amount} - Heal player by N when this terrain is tapped
-  damage_on_tap: {amount} - Deal N damage to opponent when this terrain is tapped
-
-TARGET VALUES: "self", "opponent", "target" (player chooses), "random_enemy", "all_friendly", "all_enemies", "weakest_enemy", "strongest_enemy"
-"""
+# Compact effect reference for the AI prompt
+EFFECT_REFERENCE = (
+    "EFFECTS (type | params | what it does):\n"
+    "deal_damage | target,amount | damage opponent/creature\n"
+    "heal | target,amount | heal player/creature\n"
+    "damage_all_enemies | amount | damage ALL enemy creatures\n"
+    "damage_all | amount | damage ALL creatures both sides\n"
+    "life_drain | amount | damage opponent + heal self\n"
+    "draw_cards | count | draw N cards\n"
+    "opponent_discard | count | opponent discards N random cards\n"
+    "steal_card | - | steal random card from opponent\n"
+    "swap_hands | - | swap entire hands\n"
+    "resurrect | - | return random creature from graveyard to hand\n"
+    "buff_attack | target,amount | +N attack\n"
+    "buff_health | target,amount | +N health\n"
+    "debuff_attack | target,amount | -N attack to enemy\n"
+    "debuff_health | target,amount | -N health to enemy\n"
+    "swap_stats | target | swap attack and health\n"
+    "set_attack | target,amount | set attack to N\n"
+    "set_health | target,amount | set health to N\n"
+    "destroy_creature | target | destroy (target/random_enemy/weakest_enemy)\n"
+    "destroy_terrain | - | destroy random enemy terrain\n"
+    "bounce | target | return creature to owner's hand\n"
+    "freeze | target,turns | can't attack for N turns\n"
+    "shield | target,amount | absorb N damage before health\n"
+    "taunt | target | must be attacked first\n"
+    "gain_mana | amount | bonus mana this turn\n"
+    "drain_mana | amount | opponent loses N mana\n"
+    "untap_terrains | count | untap N of your terrains\n"
+    "random_effect | - | trigger a random effect\n"
+    "cascade | - | play top deck card free if cost <= this\n"
+    "mutate | target | randomize creature stats\n"
+    "time_warp | - | extra turn (rare/powerful!)\n"
+    "mirror | - | copy opponent's last effect\n"
+    "gamble | win_effect,lose_effect | 50/50 coin flip\n"
+    "chain_lightning | amount,bounces | damage bouncing to N random targets\n"
+    "summon_token | attack,health,name | create a creature token\n"
+    "extra_mana | - | this terrain produces 2 mana instead of 1\n"
+    "heal_on_tap | amount | heal player when terrain tapped\n"
+    "damage_on_tap | amount | damage opponent when terrain tapped\n"
+    "Targets: self / opponent / target / random_enemy / all_friendly / all_enemies / weakest_enemy / strongest_enemy"
+)
 
 # Effects that spells are NOT allowed to use (to force variety)
 SPELL_BANNED_EFFECTS = {"deal_damage", "damage_all", "damage_all_enemies"}
 
 
-SYSTEM_PROMPT = """You are the card effect designer for WikiBattle, a chaotic Wikipedia-powered trading card game.
-You generate card effects based on real Wikipedia articles. Effects should be THEMATIC and FUN - connect the effect to what the article is about.
-
-RULES:
-- Go WILD with effects. Chaos is encouraged. Fun > Balance.
-- BUT: No auto-win cards. No "opponent loses the game" or "deal 30 damage" effects.
-- Creature attack should be 1-7, health should be 1-8. USE THE FULL RANGE! Not every creature is 3/5. A tiny bug might be 1/1, a god of war might be 7/6. Match the stats to the article.
-- Creature mana cost should be 1-6 (roughly proportional to power level = attack + health + effect strength)
-- Spell mana cost should be 1-5
-- Effects should feel thematic - a volcano terrain should do fire damage, a scientist creature should have smart effects, a thief should steal cards, etc.
-- Each card should have 1-3 effects, each with a trigger
-- Be creative with the effect names and descriptions! The description should be a fun flavor text.
-- Terrains always produce 1 mana base. Their effects are EXTRA bonuses (on_tap, passive, on_play, etc.)
-- IMPORTANT: Use the FULL variety of effect types! Every card you generate should use DIFFERENT effect types. Do NOT fall into patterns.
-- IMPORTANT: Vary your stats! Creatures should have widely different attack/health/cost values. Weak things should be cheap, strong things expensive.
-
-You MUST respond with valid JSON only. No markdown, no explanation, just the JSON object."""
+SYSTEM_PROMPT = (
+    "You design card effects for WikiBattle, a chaotic Wikipedia TCG. "
+    "Effects must be THEMATIC to the article and FUN. Chaos > balance, but no auto-win cards. "
+    "Use the FULL variety of effect types - never fall into patterns. "
+    "Respond with valid JSON only, no markdown."
+)
 
 
 def _build_prompt_for_card(card: dict) -> str:
@@ -184,95 +158,52 @@ def _build_prompt_for_card(card: dict) -> str:
 
     type_instructions = ""
     if card_type == "creature":
-        # Suggest a random stat range to break AI stat-clustering patterns
+        # Suggest random stats to break AI stat-clustering patterns
         atk_hint = _rng.randint(1, 7)
         hp_hint = _rng.randint(1, 8)
         cost_hint = max(1, min(6, (atk_hint + hp_hint) // 3))
 
-        type_instructions = f"""For this CREATURE card, provide:
-- "attack": integer 1-7 (SUGGESTION for this card: ~{atk_hint}, but adjust based on the subject!)
-- "health": integer 1-8 (SUGGESTION for this card: ~{hp_hint}, but adjust based on the subject!)
-  Stat examples: insect=1/1, child=1/2, scholar=2/3, soldier=4/4, knight=5/5, dragon=6/7, war god=7/8
-  Low-stat creatures should have stronger effects. High-stat creatures can have weaker or no effects.
-- "mana_cost": integer 1-6 (SUGGESTION: ~{cost_hint}. Proportional to total power: attack + health + effect strength)
-- "abilities": list of 0-2 keyword strings from: ["flying", "shield", "taunt", "stealth", "lifesteal", "deathtouch", "haste", "ward"]
-  Most creatures should have 0-1 abilities. Do NOT always pick "shield"! Match to the subject.
-- "effect_description": flavorful description of what this creature does (1-2 sentences)
-- "effects": list of effect objects (1-3 effects)
-
-Each effect object has:
-- "trigger": one of [on_play, on_death, on_attack, on_damaged, on_turn_start, on_turn_end, on_enemy_play, passive]
-- "type": the effect type string
-- "params": object with parameters for that effect type
-
-VARIETY IS KEY: Don't just use draw_cards and buff effects. Consider deal_damage, freeze, destroy_creature, summon_token, steal_card, life_drain, mutate, gamble, chain_lightning, etc."""
+        type_instructions = (
+            f"CREATURE - return JSON with:\n"
+            f"attack: 1-7 (suggest ~{atk_hint}), health: 1-8 (suggest ~{hp_hint}), "
+            f"mana_cost: 1-6 (suggest ~{cost_hint})\n"
+            f"Stats should match the subject! insect=1/1, scholar=2/3, soldier=4/4, knight=5/5, dragon=6/7, war god=7/8\n"
+            f"Low stats = stronger effects. High stats = weaker/no effects.\n"
+            f"abilities: 0-2 from [flying, shield, taunt, stealth, lifesteal, deathtouch, haste, ward] - match to subject\n"
+            f"effect_description: 1-2 sentence flavor text\n"
+            f"effects: 1-3 objects, each with trigger (on_play/on_death/on_attack/on_damaged/on_turn_start/on_turn_end/on_enemy_play/passive), type, params\n"
+            f"Use varied effects! Not just draw_cards and buffs."
+        )
 
     elif card_type == "terrain":
-        type_instructions = """For this TERRAIN card, provide:
-- "mana_cost": 0 (terrains are always free)
-- "mana_production": 1 (base mana, can be modified by effects)
-- "effect_description": flavorful description of this terrain's bonus effect (1-2 sentences)
-- "effects": list of effect objects (the BONUS effects, not the base mana production)
-
-Each effect object has:
-- "trigger": one of [on_play, on_tap, on_turn_start, on_turn_end, passive, on_enemy_play]
-- "type": the effect type string
-- "params": object with parameters for that effect type
-
-Terrain effects should feel like the PLACE is influencing the battle.
-Many boring terrains can have 0 effects - just producing mana is fine.
-But interesting/famous places should have fun bonuses! Consider:
-- extra_mana (powerful places produce more), heal_on_tap, damage_on_tap
-- buff_attack/buff_health (passive auras), freeze, shield
-- summon_token (the place spawns defenders), gain_mana, drain_mana
-- deal_damage on_play (entering the battlefield has impact)
-DO NOT default to draw_cards for everything! Match the effect to the place."""
+        type_instructions = (
+            "TERRAIN - return JSON with:\n"
+            "mana_cost: 0, mana_production: 1\n"
+            "effect_description: 1-2 sentence flavor text\n"
+            "effects: 0-2 BONUS effects (not base mana). Each has trigger (on_play/on_tap/on_turn_start/on_turn_end/passive/on_enemy_play), type, params\n"
+            "Match effects to the place! NOT just draw_cards. Consider: extra_mana, heal_on_tap, damage_on_tap, buff auras, freeze, summon_token, drain_mana.\n"
+            "Boring places can have 0 effects."
+        )
 
     elif card_type == "spell":
-        type_instructions = """For this SPELL card, provide:
-- "mana_cost": integer 1-5
-- "effect_description": flavorful description of what this spell does (1-2 sentences)
-- "effects": list of effect objects (all should have trigger "on_play" since spells are one-time)
-
-Each effect object has:
-- "trigger": "on_play"
-- "type": the effect type string
-- "params": object with parameters for that effect type
-
-Spells should feel like the EVENT is happening on the battlefield.
-IMPORTANT: Do NOT just use draw_cards + bounce + opponent_discard on every spell! That's boring!
-Instead, pick effects thematic to this specific event. Consider ALL of these:
-- freeze, destroy_creature, steal_card, swap_hands (disruption)
-- chain_lightning, life_drain (damage alternatives)
-- cascade, gamble, random_effect, mirror (chaos)
-- mutate, swap_stats, set_attack, set_health (stat manipulation)
-- summon_token (create creatures from the event)
-- shield, buff_attack, buff_health (support)
-- time_warp, resurrect, untap_terrains (powerful plays)
-- gain_mana, drain_mana, destroy_terrain (resource control)
-Combine 2-3 DIFFERENT and THEMATIC effects for interesting combos!"""
-
-    available_triggers = ", ".join(TRIGGER_TYPES)
-
-    # For spells, note which effects are banned
-    ban_notice = ""
-    if card_type == "spell":
         banned = ", ".join(sorted(SPELL_BANNED_EFFECTS))
-        ban_notice = f"\n\nBANNED EFFECTS FOR SPELLS (do NOT use these): {banned}\nUse creative alternatives instead!"
+        type_instructions = (
+            "SPELL - return JSON with:\n"
+            "mana_cost: 1-5, effect_description: 1-2 sentence flavor text\n"
+            "effects: 1-3 objects, all with trigger: on_play, plus type and params\n"
+            f"BANNED: {banned} - use creative alternatives!\n"
+            "NOT just draw_cards+bounce+opponent_discard every time! Use the full variety:\n"
+            "freeze, destroy_creature, steal_card, swap_hands, chain_lightning, life_drain,\n"
+            "cascade, gamble, mutate, summon_token, shield, time_warp, resurrect, mirror, etc."
+        )
 
-    return f"""Generate effects for this {card_type.upper()} card:
-
-Name: {name}
-Description: {extract}
-Categories: {categories}
-
-{type_instructions}
-
-{EFFECT_REFERENCE}
-Available triggers: {available_triggers}
-{ban_notice}
-
-Respond with a single JSON object. No markdown wrapping."""
+    return (
+        f"{card_type.upper()}: {name}\n"
+        f"{extract}\n"
+        f"Categories: {categories}\n\n"
+        f"{type_instructions}\n\n"
+        f"{EFFECT_REFERENCE}"
+    )
 
 
 def generate_card_effects(card: dict) -> dict:

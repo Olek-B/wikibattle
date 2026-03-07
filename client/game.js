@@ -213,9 +213,10 @@ function renderGame() {
     renderTerrains('your-terrains', gs.you.terrains, true, isMyTurn);
     renderTerrains('opp-terrains', gs.opponent ? gs.opponent.terrains : [], false, false);
 
-    // Show attack player button if we have a selected attacker
+    // Show attack player button if we have a selected attacker AND opponent has no creatures
     const atkBtn = document.getElementById('btn-attack-player');
-    if (selectedCard && selectedCard.type === 'field' && isMyTurn) {
+    const oppHasCreatures = gs.opponent && gs.opponent.field && gs.opponent.field.length > 0;
+    if (selectedCard && selectedCard.type === 'field' && isMyTurn && !oppHasCreatures) {
         atkBtn.classList.remove('hidden');
     } else {
         atkBtn.classList.add('hidden');

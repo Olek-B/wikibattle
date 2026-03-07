@@ -221,6 +221,9 @@ def play_card(game: dict, player_idx: int, hand_idx: int,
         player["hand"].pop(hand_idx)
         card["can_attack"] = False  # Summoning sickness
         card["is_tapped"] = False
+        # Store base stats for passive effect recalculation
+        card["base_attack"] = card.get("attack", 0)
+        card["base_health"] = card.get("health", 0)
         player["field"].append(card)
         game["log"].append(f"{player['name']} summons {card['name']} ({card.get('attack', '?')}/{card.get('health', '?')}) for {mana_cost} mana")
 
@@ -355,14 +358,17 @@ def attack(game: dict, player_idx: int, attacker_idx: int,
     if attacker.get("is_tapped"):
         return {"success": False, "error": f"{attacker['name']} is already tapped"}
 
+    # Can only attack the player directly if opponent has no creatures
+    if target == "player" and len(opponent["field"]) > 0:
+        return {"success": False, "error": "Cannot attack player directly while they have creatures on the field"}
+
     # Check for taunt - must attack taunt creatures first
-    taunt_creatures = [c for c in opponent["field"] if c.get("has_taunt")]
-    if taunt_creatures and target == "player":
-        return {"success": False, "error": f"Must attack taunt creature first ({taunt_creatures[0]['name']})"}
-    if taunt_creatures and target == "creature" and target_idx is not None:
-        target_card = opponent["field"][target_idx] if 0 <= target_idx < len(opponent["field"]) else None
-        if target_card and not target_card.get("has_taunt"):
-            return {"success": False, "error": f"Must attack taunt creature first ({taunt_creatures[0]['name']})"}
+    if target == "creature" and target_idx is not None:
+        taunt_creatures = [c for c in opponent["field"] if c.get("has_taunt")]
+        if taunt_creatures:
+            target_card = opponent["field"][target_idx] if 0 <= target_idx < len(opponent["field"]) else None
+            if target_card and not target_card.get("has_taunt"):
+                return {"success": False, "error": f"Must attack taunt creature first ({taunt_creatures[0]['name']})"}
 
     # Trigger on_attack effects
     attack_logs = resolve_effects(game, player_idx, attacker, "on_attack")
@@ -518,8 +524,15 @@ def _start_turn(game: dict, player_idx: int):
         logs = resolve_effects(game, player_idx, terrain, "on_turn_start")
         game["log"].extend(logs)
 
-    # Trigger passive effects (reapply each turn)
+    # Trigger passive effects (reapply each turn from base stats)
     for card in player["field"]:
+        # Reset to base stats before reapplying passive buffs to prevent stacking
+        if "base_attack" in card:
+            card["attack"] = card["base_attack"]
+        if "base_health" in card:
+            damage_taken = max(0, card.get("max_health", card["base_health"]) - card.get("health", card["base_health"]))
+            card["max_health"] = card["base_health"]
+            card["health"] = card["base_health"] - damage_taken
         logs = resolve_effects(game, player_idx, card, "passive")
         game["log"].extend(logs)
     for terrain in player["terrains"]:

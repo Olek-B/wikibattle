@@ -10,6 +10,8 @@ from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
 
+MAX_PLAYER_HP = 30
+
 
 def resolve_effects(game_state: dict, player_idx: int, card: dict,
                     trigger: str, target_idx: Optional[int] = None) -> list[str]:
@@ -93,7 +95,7 @@ def _heal(gs, pi, oi, card, params, ti):
     amount = params.get("amount", 1)
 
     if target == "self":
-        gs["players"][pi]["hp"] = min(30, gs["players"][pi]["hp"] + amount)
+        gs["players"][pi]["hp"] = min(MAX_PLAYER_HP, gs["players"][pi]["hp"] + amount)
         return f"{card['name']} heals you for {amount}! (HP: {gs['players'][pi]['hp']})"
     elif target == "creature" and ti is not None:
         field = gs["players"][pi]["field"]
@@ -130,7 +132,7 @@ def _damage_all(gs, pi, oi, card, params, ti):
 def _life_drain(gs, pi, oi, card, params, ti):
     amount = params.get("amount", 1)
     gs["players"][oi]["hp"] = max(0, gs["players"][oi]["hp"] - amount)
-    gs["players"][pi]["hp"] = min(30, gs["players"][pi]["hp"] + amount)
+    gs["players"][pi]["hp"] = min(MAX_PLAYER_HP, gs["players"][pi]["hp"] + amount)
     return f"{card['name']} drains {amount} life! (You: {gs['players'][pi]['hp']}, Opp: {gs['players'][oi]['hp']})"
 
 
@@ -450,6 +452,14 @@ def _mutate(gs, pi, oi, card, params, ti):
             t["health"] = random.randint(1, 8)
             t["max_health"] = t["health"]
             return f"{card['name']} MUTATES {t['name']}! Now {t['attack']}/{t['health']}!"
+    elif target == "random_enemy":
+        field = gs["players"][oi]["field"]
+        if field:
+            t = random.choice(field)
+            t["attack"] = random.randint(1, 7)
+            t["health"] = random.randint(1, 8)
+            t["max_health"] = t["health"]
+            return f"{card['name']} MUTATES {t['name']}! Now {t['attack']}/{t['health']}!"
     return None
 
 
@@ -555,7 +565,7 @@ def _extra_mana(gs, pi, oi, card, params, ti):
 
 def _heal_on_tap(gs, pi, oi, card, params, ti):
     amount = params.get("amount", 1)
-    gs["players"][pi]["hp"] = min(30, gs["players"][pi]["hp"] + amount)
+    gs["players"][pi]["hp"] = min(MAX_PLAYER_HP, gs["players"][pi]["hp"] + amount)
     return f"{card['name']} heals you for {amount} when tapped! (HP: {gs['players'][pi]['hp']})"
 
 
