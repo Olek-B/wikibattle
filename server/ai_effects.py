@@ -133,6 +133,9 @@ SYSTEM_PROMPT = (
     "You design card effects for WikiBattle, a chaotic Wikipedia TCG. "
     "Effects must be THEMATIC to the article and FUN. Chaos > balance, but no auto-win cards. "
     "Use the FULL variety of effect types - never fall into patterns. "
+    "Powerful effects SHOULD have drawbacks! e.g. a strong creature could damage itself on attack, "
+    "a terrain that produces extra mana could damage its owner on tap, a big buff could also help the opponent. "
+    "Mix positive and negative effects on the same card for interesting tradeoffs. "
     "Respond with valid JSON only, no markdown."
 )
 
@@ -197,7 +200,8 @@ def _build_prompt_for_card(card: dict) -> str:
             "mana_cost: 0, mana_production: 1\n"
             "effect_description: 1-2 sentence flavor text\n"
             f"{effects_note} Each has trigger (on_play/on_tap/on_turn_start/on_turn_end/passive/on_enemy_play), type, params\n"
-            "Match effects to the place! NOT just draw_cards. Consider: extra_mana, heal_on_tap, damage_on_tap, buff auras, freeze, summon_token, drain_mana."
+            "Match effects to the place! NOT just draw_cards. Consider: extra_mana, heal_on_tap, damage_on_tap, buff auras, freeze, summon_token, drain_mana.\n"
+            "IMPORTANT: powerful effects like extra_mana should come with drawbacks (e.g. also damage_on_tap to self, debuff, etc)."
         )
 
     elif card_type == "spell":

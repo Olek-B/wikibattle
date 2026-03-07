@@ -4,6 +4,7 @@ Fetches Wikipedia articles, classifies them, and builds card objects.
 Handles deck generation with proper type distribution.
 """
 
+import logging
 import random
 import uuid
 from typing import Optional
@@ -12,6 +13,8 @@ from wikipedia_api import (
     fetch_articles_with_coordinates,
     classify_article,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _make_card_id() -> str:
@@ -64,15 +67,16 @@ def build_card_from_article(article: dict, card_type: Optional[str] = None) -> d
     return card
 
 
-def generate_deck(target_size: int = 20) -> list[dict]:
+def generate_deck(target_size: int = 40) -> list[dict]:
     """Generate a random deck of cards from Wikipedia.
 
-    Aims for roughly: 8 terrains, 8 creatures, 4 spells.
+    Distribution scales with deck size:
+    ~40% terrains, ~40% creatures, ~20% spells.
     """
-    # Target distribution
-    target_terrains = 8
-    target_creatures = 8
-    target_spells = 4
+    # Target distribution (scales with deck size)
+    target_terrains = max(4, int(target_size * 0.4))
+    target_creatures = max(4, int(target_size * 0.4))
+    target_spells = max(2, target_size - target_terrains - target_creatures)
 
     terrains = []
     creatures = []
@@ -87,7 +91,11 @@ def generate_deck(target_size: int = 20) -> list[dict]:
         terrains.append(card)
 
     # Fetch random articles for creatures and spells
-    random_articles = fetch_random_articles(count=40)
+    # Fetch more than needed to account for classification misses
+    fetch_count = max(50, target_size * 2)
+    random_articles = fetch_random_articles(count=fetch_count)
+    if not random_articles:
+        logger.error("fetch_random_articles returned no articles; deck will be incomplete")
     for article in random_articles:
         card_type = classify_article(article)
 

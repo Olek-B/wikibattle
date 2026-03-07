@@ -19,6 +19,8 @@ STARTING_HAND_SIZE = 5
 MAX_HAND_SIZE = 10
 MAX_FIELD_SIZE = 7
 MAX_TERRAINS = 10
+CARDS_PER_DRAW = 2
+DECK_SIZE = 40
 
 
 def create_game() -> dict:
@@ -89,7 +91,7 @@ def initialize_decks(game: dict):
     game["log"].append("Fetching cards from Wikipedia...")
 
     for i, player in enumerate(game["players"]):
-        deck = generate_deck(target_size=20)
+        deck = generate_deck(target_size=DECK_SIZE)
         player["deck"] = deck
         game["log"].append(f"Player {player['name']} received a {len(deck)}-card deck!")
 
@@ -131,9 +133,11 @@ def get_game_state_for_player(game: dict, player_idx: int) -> dict:
         "phase": game["phase"],
         "terrain_played_this_turn": game["terrain_played_this_turn"],
         "winner": game["winner"],
-        "log": game["log"][-30:],  # Last 30 log entries
+        "log": game["log"][-50:],  # Last 50 log entries
+        "log_total": len(game["log"]),  # Total log size for change detection
         "your_idx": player_idx,
         "is_your_turn": game["current_player"] == player_idx,
+        "max_hp": STARTING_HP,
     }
 
     # Your info (full visibility)
@@ -201,6 +205,8 @@ def play_card(game: dict, player_idx: int, hand_idx: int,
 
         player["hand"].pop(hand_idx)
         card["is_tapped"] = False
+        # Store base mana production for passive effect recalculation
+        card["base_mana_production"] = card.get("mana_production", 1)
         player["terrains"].append(card)
         game["terrain_played_this_turn"] = True
         game["log"].append(f"{player['name']} plays terrain: {card['name']}")
@@ -495,11 +501,15 @@ def _start_turn(game: dict, player_idx: int):
             if creature["frozen_turns"] <= 0:
                 game["log"].append(f"{creature['name']} thaws out!")
 
-    # Draw a card
-    if player["deck"]:
-        drawn = player["deck"].pop(0)
-        player["hand"].append(drawn)
-        game["log"].append(f"{player['name']} draws a card")
+    # Draw cards
+    cards_drawn = 0
+    for _ in range(CARDS_PER_DRAW):
+        if player["deck"]:
+            drawn = player["deck"].pop(0)
+            player["hand"].append(drawn)
+            cards_drawn += 1
+    if cards_drawn > 0:
+        game["log"].append(f"{player['name']} draws {cards_drawn} card{'s' if cards_drawn > 1 else ''}")
 
         # Effects will be generated when the client requests them via
         # /api/generate-effect, or as a fallback when the card is played.

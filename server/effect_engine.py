@@ -559,8 +559,9 @@ def _summon_token(gs, pi, oi, card, params, ti):
 
 
 def _extra_mana(gs, pi, oi, card, params, ti):
-    card["mana_production"] = card.get("mana_production", 1) + 1
-    return f"{card['name']} now produces {card['mana_production']} mana!"
+    base = card.get("base_mana_production", card.get("mana_production", 1))
+    card["mana_production"] = base + 1
+    return f"{card['name']} produces {card['mana_production']} mana!"
 
 
 def _heal_on_tap(gs, pi, oi, card, params, ti):

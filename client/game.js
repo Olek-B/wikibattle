@@ -189,14 +189,14 @@ function renderGame() {
 
     // Your info
     document.getElementById('your-name').textContent = gs.you.name + (isMyTurn ? ' (Your Turn)' : '');
-    updateHpBar('your', gs.you.hp);
+    updateHpBar('your', gs.you.hp, gs.max_hp);
     document.getElementById('your-mana').textContent = `Mana: ${gs.you.mana}`;
     document.getElementById('your-deck-count').textContent = `Deck: ${gs.you.deck_count}`;
 
     // Opponent info
     if (gs.opponent) {
         document.getElementById('opp-name').textContent = gs.opponent.name + (!isMyTurn ? ' (Their Turn)' : '');
-        updateHpBar('opp', gs.opponent.hp);
+        updateHpBar('opp', gs.opponent.hp, gs.max_hp);
         document.getElementById('opp-mana').textContent = `Mana: ${gs.opponent.mana}`;
         document.getElementById('opp-deck-count').textContent = `Deck: ${gs.opponent.deck_count}`;
         document.getElementById('opp-hand-count').textContent = `Hand: ${gs.opponent.hand_count}`;
@@ -223,16 +223,16 @@ function renderGame() {
     }
 
     // Update game log
-    renderLog(gs.log);
+    renderLog(gs.log, gs.log_total);
 
     // Request effect generation for cards in hand that don't have effects yet
     requestEffectGeneration(gs.you.hand);
 }
 
-function updateHpBar(prefix, hp) {
-    const pct = Math.max(0, Math.min(100, (hp / 30) * 100));
+function updateHpBar(prefix, hp, maxHp) {
+    const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
     document.getElementById(`${prefix}-hp-fill`).style.width = `${pct}%`;
-    document.getElementById(`${prefix}-hp-text`).textContent = `${hp}/30`;
+    document.getElementById(`${prefix}-hp-text`).textContent = `${hp}/${maxHp}`;
 }
 
 function renderHand(hand, isMyTurn) {
@@ -605,8 +605,16 @@ function showCardDetail(card) {
             <div class="detail-stat"><span class="card-health">HP: ${card.health}/${card.max_health || card.health}</span></div>
             <div class="detail-stat">Cost: ${card.mana_cost}</div>
         </div>`;
+        // Status effects
+        const statuses = [];
+        if (card.frozen_turns > 0) statuses.push(`<span style="color:#88ccff">Frozen (${card.frozen_turns} turn${card.frozen_turns > 1 ? 's' : ''} remaining)</span>`);
+        if (card.has_taunt) statuses.push('<span style="color:var(--gold)">Taunt - must be attacked first</span>');
+        if (card.shield > 0) statuses.push(`<span style="color:var(--mana-blue)">Shield - absorbs ${card.shield} damage</span>`);
         if (card.abilities && card.abilities.length) {
-            statsHtml += `<div style="margin-top:0.3rem;font-size:0.8rem;color:var(--gold)">${card.abilities.join(', ')}</div>`;
+            statuses.push(`<span style="color:var(--gold)">${card.abilities.join(', ')}</span>`);
+        }
+        if (statuses.length) {
+            statsHtml += `<div style="margin-top:0.3rem;font-size:0.8rem">${statuses.join('<br>')}</div>`;
         }
     } else if (card.card_type === 'terrain') {
         statsHtml = `<div class="detail-stats">
@@ -655,13 +663,14 @@ function closeCardDetail(event) {
 
 // --- Game Log ---
 
-function renderLog(log) {
+function renderLog(log, logTotal) {
     if (!log) return;
     const content = document.getElementById('log-content');
 
-    // Only update if log changed
-    if (log.length === lastLogLength) return;
-    lastLogLength = log.length;
+    // Use total log length from server for change detection (not truncated array length)
+    const totalLen = logTotal || log.length;
+    if (totalLen === lastLogLength) return;
+    lastLogLength = totalLen;
 
     content.innerHTML = log.map(entry => {
         const cls = entry.includes('---') ? 'log-entry-highlight' : '';

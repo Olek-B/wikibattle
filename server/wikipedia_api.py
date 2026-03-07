@@ -3,9 +3,12 @@
 Fetches random articles and extracts relevant metadata for card generation.
 """
 
+import logging
 import requests
 import re
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 USER_AGENT = "WikiBattle/1.0 (card game; educational)"
@@ -92,66 +95,90 @@ def fetch_random_articles(count: int = 20) -> list[dict]:
 
     Returns a list of article dicts with keys:
         pageid, title, extract, thumbnail, categories, coordinates, url
+    Makes multiple API requests if needed (Wikipedia caps at 50 per request).
+    Over-fetches to compensate for stubs and duplicates being filtered out.
     """
-    # We fetch more than needed because some articles may be stubs
-    fetch_count = min(count * 3, 50)
     session = _session()
-
-    params = {
-        "action": "query",
-        "format": "json",
-        "generator": "random",
-        "grnnamespace": 0,
-        "grnlimit": fetch_count,
-        "grnfilterredir": "nonredirects",
-        "prop": "extracts|pageimages|categories|coordinates",
-        "exintro": True,
-        "explaintext": True,
-        "exsectionformat": "plain",
-        "pithumbsize": 300,
-        "cllimit": 20,
-        "colimit": 50,
-    }
-
-    try:
-        resp = session.get(WIKI_API, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except (requests.RequestException, ValueError):
-        return []
-
-    pages = data.get("query", {}).get("pages", {})
     articles = []
+    seen_ids: set[int] = set()
 
-    for page_id, page in pages.items():
-        extract = page.get("extract", "")
-        # Skip very short stubs
-        if len(extract) < 80:
-            continue
+    # Over-fetch by 30% to compensate for stub/duplicate filtering
+    target = int(count * 1.3) + 5
+    max_retries = 5  # Cap total API calls to avoid infinite loops
+    calls_made = 0
 
-        categories = [
-            c.get("title", "").replace("Category:", "").lower()
-            for c in page.get("categories", [])
-        ]
+    while len(articles) < count and calls_made < max_retries:
+        batch_size = min(target - len(articles), 50)
+        if batch_size <= 0:
+            break
+        calls_made += 1
 
-        coords = None
-        if "coordinates" in page:
-            c = page["coordinates"][0]
-            coords = {"lat": c["lat"], "lon": c["lon"]}
+        params = {
+            "action": "query",
+            "format": "json",
+            "generator": "random",
+            "grnnamespace": 0,
+            "grnlimit": batch_size,
+            "grnfilterredir": "nonredirects",
+            "prop": "extracts|pageimages|categories|coordinates",
+            "exintro": True,
+            "explaintext": True,
+            "exsectionformat": "plain",
+            "pithumbsize": 300,
+            "cllimit": 20,
+            "colimit": 50,
+        }
 
-        thumbnail = None
-        if "thumbnail" in page:
-            thumbnail = page["thumbnail"]["source"]
+        try:
+            resp = session.get(WIKI_API, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning("Wikipedia API batch %d/%d failed: %s", calls_made, max_retries, exc)
+            continue  # Try another batch instead of giving up entirely
 
-        articles.append({
-            "pageid": page.get("pageid"),
-            "title": page.get("title", "Unknown"),
-            "extract": extract[:500],  # Trim for AI prompt size
-            "thumbnail": thumbnail,
-            "categories": categories,
-            "coordinates": coords,
-            "url": f"https://en.wikipedia.org/wiki/{page.get('title', '').replace(' ', '_')}",
-        })
+        pages = data.get("query", {}).get("pages", {})
+
+        for page_id_str, page in pages.items():
+            pid = page.get("pageid")
+            if pid in seen_ids:
+                continue
+            seen_ids.add(pid)
+
+            extract = page.get("extract", "")
+            # Skip very short stubs
+            if len(extract) < 80:
+                continue
+
+            categories = [
+                c.get("title", "").replace("Category:", "").lower()
+                for c in page.get("categories", [])
+            ]
+
+            coords = None
+            if "coordinates" in page:
+                c = page["coordinates"][0]
+                coords = {"lat": c["lat"], "lon": c["lon"]}
+
+            thumbnail = None
+            if "thumbnail" in page:
+                thumbnail = page["thumbnail"]["source"]
+
+            articles.append({
+                "pageid": pid,
+                "title": page.get("title", "Unknown"),
+                "extract": extract[:500],  # Trim for AI prompt size
+                "thumbnail": thumbnail,
+                "categories": categories,
+                "coordinates": coords,
+                "url": f"https://en.wikipedia.org/wiki/{page.get('title', '').replace(' ', '_')}",
+            })
+
+    if len(articles) < count:
+        logger.warning(
+            "fetch_random_articles: requested %d, got %d after %d API calls",
+            count, len(articles), calls_made,
+        )
 
     return articles[:count]
 
