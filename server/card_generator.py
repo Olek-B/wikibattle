@@ -14,6 +14,7 @@ from wikipedia_api import (
     classify_article,
 )
 from card_cache import get_cached_effects
+from ai_effects import generate_card_effects
 
 logger = logging.getLogger(__name__)
 
