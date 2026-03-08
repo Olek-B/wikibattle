@@ -1,54 +1,65 @@
-"""Card effect cache using Supabase.
+"""Card effect cache using SQLite.
 
 Caches AI-generated card effects so we don't re-call Groq for the same
-Wikipedia article. Uses Supabase's REST API (PostgREST) - no special
-database driver needed, just `requests`.
+Wikipedia article. Uses SQLite for simple file-based storage.
 
-Environment variables:
-  SUPABASE_URL  - e.g. https://abcdef.supabase.co
-  SUPABASE_KEY  - the anon/public API key (not the service role key)
+The cache database is stored at: /tmp/wikibattle_card_cache.db
+This location works well on PythonAnywhere's free tier.
 
-Supabase table setup (run in SQL Editor):
-
+Table schema:
   CREATE TABLE card_effects_cache (
     key TEXT PRIMARY KEY,
     card_type TEXT NOT NULL,
-    effects_data JSONB NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
+    effects_data TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
-
-  -- Allow anon read/write (or use service key instead)
-  ALTER TABLE card_effects_cache ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "Allow all access" ON card_effects_cache
-    FOR ALL USING (true) WITH CHECK (true);
 """
 
 import os
 import json
+import sqlite3
 import logging
 from typing import Optional
 
-import requests
-
 logger = logging.getLogger(__name__)
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-TABLE = "card_effects_cache"
+# SQLite database path - use /tmp for PythonAnywhere compatibility
+DB_PATH = os.environ.get("WIKIBATTLE_CACHE_DB", "/tmp/wikibattle_card_cache.db")
+
+_initialized = False
 
 
-def _headers() -> dict:
-    """Build request headers for Supabase REST API."""
-    return {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-    }
+def _get_connection() -> sqlite3.Connection:
+    """Get a database connection with row factory enabled."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-def _is_configured() -> bool:
-    return bool(SUPABASE_URL and SUPABASE_KEY)
+def _ensure_table() -> None:
+    """Create the cache table if it doesn't exist."""
+    global _initialized
+    if _initialized:
+        return
+
+    try:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS card_effects_cache (
+                    key TEXT PRIMARY KEY,
+                    card_type TEXT NOT NULL,
+                    effects_data TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            _initialized = True
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to initialize cache table: {e}")
 
 
 def _make_key(article_title: str, card_type: str) -> str:
@@ -62,28 +73,25 @@ def get_cached_effects(article_title: str, card_type: str) -> Optional[dict]:
     Returns the effects_data dict if found, or None on cache miss.
     Silently returns None on any error (cache is best-effort).
     """
-    if not _is_configured():
-        return None
-
-    key = _make_key(article_title, card_type)
-
     try:
-        url = f"{SUPABASE_URL}/rest/v1/{TABLE}"
-        params = {
-            "select": "effects_data",
-            "key": f"eq.{key}",
-        }
-        resp = requests.get(url, headers=_headers(), params=params, timeout=5)
-        resp.raise_for_status()
-
-        rows = resp.json()
-        if rows and len(rows) > 0:
-            data = rows[0].get("effects_data")
-            if isinstance(data, str):
-                data = json.loads(data)
-            logger.info(f"Cache HIT for '{article_title}' ({card_type})")
-            return data
-
+        _ensure_table()
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            key = _make_key(article_title, card_type)
+            cursor.execute(
+                "SELECT effects_data FROM card_effects_cache WHERE key = ?",
+                (key,)
+            )
+            row = cursor.fetchone()
+            if row:
+                data = row["effects_data"]
+                if isinstance(data, str):
+                    data = json.loads(data)
+                logger.info(f"Cache HIT for '{article_title}' ({card_type})")
+                return data
+        finally:
+            conn.close()
     except Exception as e:
         logger.warning(f"Cache lookup failed for '{article_title}': {e}")
 
@@ -93,28 +101,25 @@ def get_cached_effects(article_title: str, card_type: str) -> Optional[dict]:
 def store_effects(article_title: str, card_type: str, effects_data: dict) -> None:
     """Store AI-generated effects in the cache.
 
-    Uses upsert so re-generating a card just overwrites the old entry.
+    Uses INSERT OR REPLACE so re-generating a card just overwrites the old entry.
     Silently ignores errors (cache is best-effort).
     """
-    if not _is_configured():
-        return
-
-    key = _make_key(article_title, card_type)
-
     try:
-        url = f"{SUPABASE_URL}/rest/v1/{TABLE}"
-        headers = _headers()
-        headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
-
-        payload = {
-            "key": key,
-            "card_type": card_type,
-            "effects_data": effects_data,
-        }
-
-        resp = requests.post(url, headers=headers, json=payload, timeout=5)
-        resp.raise_for_status()
-        logger.info(f"Cache STORED for '{article_title}' ({card_type})")
-
+        _ensure_table()
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            key = _make_key(article_title, card_type)
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO card_effects_cache (key, card_type, effects_data)
+                VALUES (?, ?, ?)
+                """,
+                (key, card_type, json.dumps(effects_data))
+            )
+            conn.commit()
+            logger.info(f"Cache STORED for '{article_title}' ({card_type})")
+        finally:
+            conn.close()
     except Exception as e:
         logger.warning(f"Cache store failed for '{article_title}': {e}")

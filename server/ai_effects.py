@@ -228,7 +228,7 @@ def _build_prompt_for_card(card: dict) -> str:
 def generate_card_effects(card: dict) -> dict:
     """Generate effects for a card using the Groq API.
 
-    Checks the Supabase cache first; on miss, calls Groq and caches the result.
+    Checks the SQLite cache first; on miss, calls Groq and caches the result.
     Returns the updated card dict with effects filled in.
     Falls back to simple defaults if API fails.
     """
