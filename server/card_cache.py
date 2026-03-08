@@ -19,7 +19,7 @@ import os
 import json
 import sqlite3
 import logging
-from typing import Optional
+from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -123,3 +123,125 @@ def store_effects(article_title: str, card_type: str, effects_data: dict) -> Non
             conn.close()
     except Exception as e:
         logger.warning(f"Cache store failed for '{article_title}': {e}")
+
+
+def list_all_cards(limit: int = 100, card_type: Optional[str] = None) -> List[Dict]:
+    """List all cached cards from the database.
+    
+    Args:
+        limit: Maximum number of cards to return
+        card_type: Optional filter by card type ('creature', 'terrain', 'spell')
+    
+    Returns:
+        List of card dicts with name, card_type, and effects_data
+    """
+    try:
+        _ensure_table()
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            if card_type:
+                cursor.execute(
+                    "SELECT key, card_type, effects_data FROM card_effects_cache WHERE card_type = ? ORDER BY created_at DESC LIMIT ?",
+                    (card_type, limit)
+                )
+            else:
+                cursor.execute(
+                    "SELECT key, card_type, effects_data FROM card_effects_cache ORDER BY created_at DESC LIMIT ?",
+                    (limit,)
+                )
+            rows = cursor.fetchall()
+            cards = []
+            for row in rows:
+                key = row["key"]
+                name = key.rsplit("|", 1)[0] if "|" in key else key
+                data = row["effects_data"]
+                if isinstance(data, str):
+                    data = json.loads(data)
+                cards.append({
+                    "key": key,
+                    "name": name,
+                    "card_type": row["card_type"],
+                    "effects_data": data,
+                })
+            return cards
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to list cards: {e}")
+        return []
+
+
+def search_cards(query: str, limit: int = 50) -> List[Dict]:
+    """Search for cards by name.
+    
+    Args:
+        query: Search query string
+        limit: Maximum number of cards to return
+    
+    Returns:
+        List of matching card dicts
+    """
+    try:
+        _ensure_table()
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            search_pattern = f"%{query}%"
+            cursor.execute(
+                """
+                SELECT key, card_type, effects_data 
+                FROM card_effects_cache 
+                WHERE key LIKE ? 
+                ORDER BY created_at DESC 
+                LIMIT ?
+                """,
+                (search_pattern, limit)
+            )
+            rows = cursor.fetchall()
+            cards = []
+            for row in rows:
+                key = row["key"]
+                name = key.rsplit("|", 1)[0] if "|" in key else key
+                data = row["effects_data"]
+                if isinstance(data, str):
+                    data = json.loads(data)
+                cards.append({
+                    "key": key,
+                    "name": name,
+                    "card_type": row["card_type"],
+                    "effects_data": data,
+                })
+            return cards
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to search cards: {e}")
+        return []
+
+
+def get_card_count() -> Dict[str, int]:
+    """Get count of cards by type.
+    
+    Returns:
+        Dict with counts for each card type
+    """
+    try:
+        _ensure_table()
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT card_type, COUNT(*) as count FROM card_effects_cache GROUP BY card_type"
+            )
+            rows = cursor.fetchall()
+            counts = {"creature": 0, "terrain": 0, "spell": 0, "total": 0}
+            for row in rows:
+                counts[row["card_type"]] = row["count"]
+                counts["total"] += row["count"]
+            return counts
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to get card count: {e}")
+        return {"creature": 0, "terrain": 0, "spell": 0, "total": 0}

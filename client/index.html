@@ -18,6 +18,40 @@
                 <input type="text" id="player-name" placeholder="Enter your name" maxlength="20" value="">
             </div>
 
+            <!-- Deck Configuration -->
+            <div class="lobby-section deck-config-section">
+                <h3>Deck Configuration</h3>
+                <p class="config-hint">Customize your deck composition (default: 16/16/8)</p>
+                
+                <div class="config-sliders">
+                    <div class="config-slider">
+                        <label>Creatures: <span id="creature-count">16</span></label>
+                        <input type="range" id="creature-slider" min="4" max="30" value="16" oninput="updateDeckConfig()">
+                    </div>
+                    <div class="config-slider">
+                        <label>Terrains: <span id="terrain-count">16</span></label>
+                        <input type="range" id="terrain-slider" min="4" max="30" value="16" oninput="updateDeckConfig()">
+                    </div>
+                    <div class="config-slider">
+                        <label>Spells: <span id="spell-count">8</span></label>
+                        <input type="range" id="spell-slider" min="2" max="20" value="8" oninput="updateDeckConfig()">
+                    </div>
+                </div>
+                <p class="config-total">Total cards: <span id="total-cards">40</span></p>
+            </div>
+
+            <!-- Guaranteed Cards Selection -->
+            <div class="lobby-section guaranteed-section">
+                <h3>Guaranteed Cards (<span id="guaranteed-count">0</span>/5)</h3>
+                <p class="config-hint">Choose up to 5 cards from the database to guarantee in your deck</p>
+                
+                <div class="guaranteed-controls">
+                    <button class="btn btn-small btn-secondary" onclick="openCardBrowser()">Browse Card Database</button>
+                    <button class="btn btn-small btn-secondary" onclick="clearGuaranteedCards()">Clear All</button>
+                </div>
+                <div id="guaranteed-cards-list" class="guaranteed-cards-list"></div>
+            </div>
+
             <div class="lobby-actions">
                 <button id="btn-create" class="btn btn-primary" onclick="createGame()">Create Game</button>
 
@@ -45,6 +79,34 @@
                     <p class="muted">No games available</p>
                 </div>
                 <button class="btn btn-small" onclick="refreshGames()">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CARD BROWSER MODAL -->
+    <div id="card-browser" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Card Database</h2>
+                <button class="modal-close" onclick="closeCardBrowser()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="browser-controls">
+                    <input type="text" id="card-search" placeholder="Search cards..." onkeyup="handleSearch(event)">
+                    <select id="card-type-filter" onchange="loadCardDatabase()">
+                        <option value="">All Types</option>
+                        <option value="creature">Creatures</option>
+                        <option value="terrain">Terrains</option>
+                        <option value="spell">Spells</option>
+                    </select>
+                    <button class="btn btn-small" onclick="loadCardDatabase()">Search</button>
+                </div>
+                <div id="card-count-display" class="card-count-display"></div>
+                <div id="card-browser-grid" class="card-browser-grid"></div>
+                <div id="browser-loading" class="browser-loading hidden">Loading cards...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeCardBrowser()">Done</button>
             </div>
         </div>
     </div>

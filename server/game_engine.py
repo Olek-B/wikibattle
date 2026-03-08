@@ -6,8 +6,8 @@ Manages game state, turn flow, combat, mana (terrain-based), and win conditions.
 import uuid
 import time
 import logging
-from typing import Optional
-from card_generator import generate_deck, card_to_client_view
+from typing import Optional, Dict
+from card_generator import generate_deck, card_to_client_view, generate_fresh_card
 from effect_engine import resolve_effects, cleanup_dead_creatures
 from ai_effects import generate_card_effects
 
@@ -20,11 +20,21 @@ MAX_HAND_SIZE = 10
 MAX_FIELD_SIZE = 7
 MAX_TERRAINS = 10
 CARDS_PER_DRAW = 2
-DECK_SIZE = 40
+DEFAULT_DECK_SIZE = 40
+DEFAULT_DECK_CONFIG = {
+    "creatures": 16,
+    "terrains": 16,
+    "spells": 8,
+}
+MAX_GUARANTEED_CARDS = 5
 
 
-def create_game() -> dict:
+def create_game(deck_config: Optional[dict] = None, guaranteed_cards: Optional[list] = None) -> dict:
     """Create a new game and return the game state.
+
+    Args:
+        deck_config: Optional dict with creature/terrain/spell counts
+        guaranteed_cards: Optional list of card keys to guarantee in deck (max 5)
 
     Returns dict with game_id and the initial state.
     The game waits for two players before starting.
@@ -44,6 +54,8 @@ def create_game() -> dict:
         "log": [],
         "last_played_effects": {},  # For mirror effect
         "players": [],
+        "deck_config": deck_config or DEFAULT_DECK_CONFIG.copy(),
+        "guaranteed_cards": (guaranteed_cards or [])[:MAX_GUARANTEED_CARDS],
     }
     return game
 
@@ -84,22 +96,42 @@ def add_player(game: dict, player_name: str) -> dict:
 
 
 def initialize_decks(game: dict):
-    """Generate decks for both players from Wikipedia.
+    """Initialize players with guaranteed cards and setup for fresh card drawing.
 
-    Called after both players join. This can be slow due to API calls.
+    Called after both players join. Guaranteed cards are pre-generated and added
+    to the player's deck. During the game, cards are generated fresh on draw.
     """
-    game["log"].append("Fetching cards from Wikipedia...")
+    game["log"].append("Preparing decks...")
+
+    deck_config = game.get("deck_config", DEFAULT_DECK_CONFIG)
+    guaranteed_cards = game.get("guaranteed_cards", [])
 
     for i, player in enumerate(game["players"]):
-        deck = generate_deck(target_size=DECK_SIZE)
-        player["deck"] = deck
-        game["log"].append(f"Player {player['name']} received a {len(deck)}-card deck!")
+        # Start with guaranteed cards in the deck
+        player_deck = []
+        
+        if guaranteed_cards:
+            from card_cache import search_cards
+            from card_generator import build_card_from_cache
+            for key in guaranteed_cards:
+                name = key.rsplit("|", 1)[0] if "|" in key else key
+                found = search_cards(name, limit=5)
+                for card_data in found:
+                    if card_data["key"] == key:
+                        card = build_card_from_cache(card_data)
+                        player_deck.append(card)
+                        break
+        
+        player["deck"] = player_deck
+        # Track drawn counts for type-balanced fresh generation
+        player["drawn_counts"] = {"creature": 0, "terrain": 0, "spell": 0}
+        game["log"].append(f"Player {player['name']} has {len(player_deck)} guaranteed card(s)")
 
-    # Draw starting hands
+    # Draw starting hands (using fresh generation)
     for player in game["players"]:
         for _ in range(STARTING_HAND_SIZE):
-            if player["deck"]:
-                card = player["deck"].pop(0)
+            card = _draw_fresh_card(player, deck_config)
+            if card:
                 player["hand"].append(card)
 
     game["status"] = "active"
@@ -108,6 +140,25 @@ def initialize_decks(game: dict):
     game["phase"] = "main"
     game["terrain_played_this_turn"] = False
     game["log"].append(f"Game started! {game['players'][0]['name']} goes first.")
+
+
+def _draw_fresh_card(player: dict, deck_config: dict) -> Optional[dict]:
+    """Draw a fresh card generated on-demand from Wikipedia.
+    
+    Uses type-balanced generation to match the deck configuration ratios.
+    """
+    from card_generator import generate_card_by_type_preference
+    
+    drawn_counts = player.get("drawn_counts", {"creature": 0, "terrain": 0, "spell": 0})
+    card = generate_card_by_type_preference(deck_config, drawn_counts)
+    
+    if card:
+        # Track what type was drawn
+        card_type = card.get("card_type", "creature")
+        drawn_counts[card_type] = drawn_counts.get(card_type, 0) + 1
+        player["drawn_counts"] = drawn_counts
+
+    return card
 
 
 def get_player_idx_by_token(game: dict, token: str) -> Optional[int]:
@@ -501,26 +552,18 @@ def _start_turn(game: dict, player_idx: int):
             if creature["frozen_turns"] <= 0:
                 game["log"].append(f"{creature['name']} thaws out!")
 
-    # Draw cards
+    # Draw cards (fresh generation from Wikipedia)
     cards_drawn = 0
+    deck_config = game.get("deck_config", DEFAULT_DECK_CONFIG)
+    
     for _ in range(CARDS_PER_DRAW):
-        if player["deck"]:
-            drawn = player["deck"].pop(0)
-            player["hand"].append(drawn)
+        card = _draw_fresh_card(player, deck_config)
+        if card:
+            player["hand"].append(card)
             cards_drawn += 1
+    
     if cards_drawn > 0:
         game["log"].append(f"{player['name']} draws {cards_drawn} card{'s' if cards_drawn > 1 else ''}")
-
-        # Effects will be generated when the client requests them via
-        # /api/generate-effect, or as a fallback when the card is played.
-        # We don't generate here to avoid holding the game lock during
-        # a potentially slow Groq API call.
-    else:
-        # Fatigue damage if deck is empty
-        fatigue = game.get(f"fatigue_{player_idx}", 1)
-        player["hp"] -= fatigue
-        game[f"fatigue_{player_idx}"] = fatigue + 1
-        game["log"].append(f"{player['name']} takes {fatigue} fatigue damage! (empty deck)")
 
     # Add bonus mana
     player["mana"] += player.get("bonus_mana", 0)

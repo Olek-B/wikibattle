@@ -20,6 +20,7 @@ from game_engine import (
     attack, end_turn,
 )
 from ai_effects import generate_card_effects
+from card_cache import list_all_cards, search_cards, get_card_count
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -111,8 +112,24 @@ def api_create_game():
 
     data = request.get_json() or {}
     player_name = data.get('name', 'Player 1')
+    
+    # Deck configuration
+    deck_config = data.get('deck_config')
+    if deck_config:
+        # Validate and sanitize deck config
+        creatures = max(4, min(30, int(deck_config.get('creatures', 16))))
+        terrains = max(4, min(30, int(deck_config.get('terrains', 16))))
+        spells = max(2, min(20, int(deck_config.get('spells', 8))))
+        deck_config = {'creatures': creatures, 'terrains': terrains, 'spells': spells}
+    
+    # Guaranteed cards (max 5)
+    guaranteed_cards = data.get('guaranteed_cards', [])
+    if isinstance(guaranteed_cards, list):
+        guaranteed_cards = [str(c) for c in guaranteed_cards[:5]]
+    else:
+        guaranteed_cards = []
 
-    game = create_game()
+    game = create_game(deck_config=deck_config, guaranteed_cards=guaranteed_cards)
     player_info = add_player(game, player_name)
 
     with games_lock:
@@ -313,6 +330,36 @@ def api_list_games():
                     'created_at': game.get('created_at', 0),
                 })
     return jsonify({'success': True, 'games': available})
+
+
+@app.route('/api/card-database', methods=['GET'])
+def api_card_database():
+    """Browse cards in the database.
+    
+    Query params:
+        type: Optional filter by card type (creature, terrain, spell)
+        search: Optional search query
+        limit: Max results (default 100)
+    """
+    card_type = request.args.get('type', None)
+    search_query = request.args.get('search', None)
+    limit = min(int(request.args.get('limit', 100)), 500)
+    
+    if search_query:
+        cards = search_cards(search_query, limit=limit)
+    elif card_type:
+        cards = list_all_cards(limit=limit, card_type=card_type)
+    else:
+        cards = list_all_cards(limit=limit)
+    
+    return jsonify({'success': True, 'cards': cards})
+
+
+@app.route('/api/card-count', methods=['GET'])
+def api_card_count():
+    """Get count of cards in database by type."""
+    counts = get_card_count()
+    return jsonify({'success': True, 'counts': counts})
 
 
 # --- Cleanup ---

@@ -103,6 +103,198 @@ async function refreshGames() {
     }
 }
 
+// --- Deck Configuration ---
+
+let deckConfig = { creatures: 16, terrains: 16, spells: 8 };
+let guaranteedCards = [];
+
+function updateDeckConfig() {
+    const creatures = parseInt(document.getElementById('creature-slider').value);
+    const terrains = parseInt(document.getElementById('terrain-slider').value);
+    const spells = parseInt(document.getElementById('spell-slider').value);
+    
+    deckConfig = { creatures, terrains, spells };
+    
+    document.getElementById('creature-count').textContent = creatures;
+    document.getElementById('terrain-count').textContent = terrains;
+    document.getElementById('spell-count').textContent = spells;
+    document.getElementById('total-cards').textContent = creatures + terrains + spells;
+}
+
+function updateGuaranteedCount() {
+    document.getElementById('guaranteed-count').textContent = guaranteedCards.length;
+    renderGuaranteedCards();
+}
+
+function renderGuaranteedCards() {
+    const list = document.getElementById('guaranteed-cards-list');
+    if (guaranteedCards.length === 0) {
+        list.innerHTML = '<p class="muted">No guaranteed cards selected</p>';
+        return;
+    }
+    
+    list.innerHTML = guaranteedCards.map((card, idx) => `
+        <div class="guaranteed-card-item">
+            <span class="card-name">${escapeHtml(card.name)}</span>
+            <span class="card-type-badge ${card.card_type}">${card.card_type}</span>
+            <button class="btn-remove" onclick="removeGuaranteedCard(${idx})">&times;</button>
+        </div>
+    `).join('');
+}
+
+function addGuaranteedCard(card) {
+    if (guaranteedCards.length >= 5) {
+        showToast('Maximum 5 guaranteed cards allowed');
+        return false;
+    }
+    
+    // Check for duplicates
+    if (guaranteedCards.some(c => c.key === card.key)) {
+        showToast('Card already in guaranteed list');
+        return false;
+    }
+    
+    guaranteedCards.push(card);
+    updateGuaranteedCount();
+    showToast(`Added ${card.name} to guaranteed cards`);
+    return true;
+}
+
+function removeGuaranteedCard(idx) {
+    if (idx >= 0 && idx < guaranteedCards.length) {
+        const removed = guaranteedCards.splice(idx, 1);
+        updateGuaranteedCount();
+        showToast(`Removed ${removed[0].name}`);
+    }
+}
+
+function clearGuaranteedCards() {
+    guaranteedCards = [];
+    updateGuaranteedCount();
+    showToast('Cleared all guaranteed cards');
+}
+
+// --- Card Browser ---
+
+function openCardBrowser() {
+    document.getElementById('card-browser').classList.remove('hidden');
+    loadCardDatabase();
+}
+
+function closeCardBrowser() {
+    document.getElementById('card-browser').classList.add('hidden');
+}
+
+async function loadCardDatabase() {
+    const grid = document.getElementById('card-browser-grid');
+    const loading = document.getElementById('browser-loading');
+    const countDisplay = document.getElementById('card-count-display');
+    
+    grid.innerHTML = '';
+    loading.classList.remove('hidden');
+    
+    try {
+        const type = document.getElementById('card-type-filter').value;
+        const search = document.getElementById('card-search').value.trim();
+        
+        let url = `${API_BASE}/api/card-database?limit=100`;
+        if (type) url += `&type=${type}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        
+        const resp = await fetch(url);
+        const data = await resp.json();
+        
+        loading.classList.add('hidden');
+        
+        if (!data.success || !data.cards || data.cards.length === 0) {
+            grid.innerHTML = '<p class="muted">No cards found. Play some games to build the database!</p>';
+            countDisplay.textContent = '';
+            return;
+        }
+        
+        countDisplay.textContent = `Showing ${data.cards.length} card(s)`;
+        
+        grid.innerHTML = data.cards.map(card => `
+            <div class="browser-card" onclick="selectCardFromBrowser('${escapeHtml(card.key)}', '${escapeHtml(card.name)}', '${card.card_type}')">
+                <div class="browser-card-header">
+                    <span class="browser-card-name">${escapeHtml(card.name)}</span>
+                    <span class="card-type-badge ${card.card_type}">${card.card_type}</span>
+                </div>
+                <div class="browser-card-effects">
+                    ${card.effects_data?.effect_description ? escapeHtml(card.effects_data.effect_description) : 'No description'}
+                </div>
+                ${card.card_type === 'creature' ? `
+                    <div class="browser-card-stats">
+                        <span>⚔️${card.effects_data?.attack || '?'}</span>
+                        <span>❤️${card.effects_data?.health || '?'}</span>
+                        <span>💎${card.effects_data?.mana_cost || '?'}</span>
+                    </div>
+                ` : card.card_type === 'spell' ? `
+                    <div class="browser-card-stats">
+                        <span>💎${card.effects_data?.mana_cost || '?'}</span>
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+        
+    } catch (e) {
+        console.error('Failed to load card database:', e);
+        loading.classList.add('hidden');
+        grid.innerHTML = '<p class="error">Failed to load cards</p>';
+    }
+}
+
+function handleSearch(event) {
+    if (event.key === 'Enter') {
+        loadCardDatabase();
+    }
+}
+
+function selectCardFromBrowser(key, name, cardType) {
+    const card = { key, name, card_type: cardType };
+    if (addGuaranteedCard(card)) {
+        // Visual feedback
+        showToast(`Added ${name} to guaranteed cards`);
+    }
+}
+
+// Override createGame to include deck config
+async function createGame() {
+    const name = document.getElementById('player-name').value.trim() || 'Player 1';
+    const errEl = document.getElementById('lobby-error');
+    errEl.classList.add('hidden');
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/create-game`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name,
+                deck_config: deckConfig,
+                guaranteed_cards: guaranteedCards.map(c => c.key),
+            }),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error);
+
+        gameId = data.game_id;
+        playerToken = data.player_token;
+        playerIdx = data.player_idx;
+
+        // Show waiting room
+        document.getElementById('waiting-room').classList.remove('hidden');
+        document.getElementById('display-code').textContent = gameId;
+        document.getElementById('btn-create').disabled = true;
+        document.getElementById('btn-join').disabled = true;
+
+        // Start polling for opponent
+        startPolling();
+    } catch (e) {
+        errEl.textContent = e.message;
+        errEl.classList.remove('hidden');
+    }
+}
+
 // --- Polling ---
 
 function startPolling() {

@@ -7,12 +7,13 @@ Handles deck generation with proper type distribution.
 import logging
 import random
 import uuid
-from typing import Optional
+from typing import Optional, List, Dict
 from wikipedia_api import (
     fetch_random_articles,
     fetch_articles_with_coordinates,
     classify_article,
 )
+from card_cache import get_cached_effects
 
 logger = logging.getLogger(__name__)
 
@@ -67,26 +68,61 @@ def build_card_from_article(article: dict, card_type: Optional[str] = None) -> d
     return card
 
 
-def generate_deck(target_size: int = 40) -> list[dict]:
+def generate_deck(target_size: int = 40, deck_config: Optional[Dict] = None,
+                  guaranteed_cards: Optional[List[str]] = None) -> list[dict]:
     """Generate a random deck of cards from Wikipedia.
 
+    Args:
+        target_size: Total deck size
+        deck_config: Dict with creature/terrain/spell counts (default: ~40/40/20 split)
+        guaranteed_cards: List of card keys to guarantee in deck
+
     Distribution scales with deck size:
-    ~40% terrains, ~40% creatures, ~20% spells.
+    ~40% terrains, ~40% creatures, ~20% spells (or custom config).
     """
-    # Target distribution (scales with deck size)
-    target_terrains = max(4, int(target_size * 0.4))
-    target_creatures = max(4, int(target_size * 0.4))
-    target_spells = max(2, target_size - target_terrains - target_creatures)
+    config = deck_config or {
+        "creatures": max(4, int(target_size * 0.4)),
+        "terrains": max(4, int(target_size * 0.4)),
+        "spells": max(2, target_size - int(target_size * 0.4) - int(target_size * 0.4)),
+    }
+
+    target_creatures = config.get("creatures", int(target_size * 0.4))
+    target_terrains = config.get("terrains", int(target_size * 0.4))
+    target_spells = config.get("spells", target_size - target_creatures - target_terrains)
 
     terrains = []
     creatures = []
     spells = []
+
+    # Add guaranteed cards first
+    if guaranteed_cards:
+        from card_cache import search_cards
+        for key in guaranteed_cards:
+            # Extract name from key (format: "name|type")
+            name = key.rsplit("|", 1)[0] if "|" in key else key
+            # Search for the card in cache
+            found = search_cards(name, limit=5)
+            for card_data in found:
+                if card_data["key"] == key:
+                    card = build_card_from_cache(card_data)
+                    if card["card_type"] == "creature" and len(creatures) < target_creatures:
+                        creatures.append(card)
+                        break
+                    elif card["card_type"] == "terrain" and len(terrains) < target_terrains:
+                        terrains.append(card)
+                        break
+                    elif card["card_type"] == "spell" and len(spells) < target_spells:
+                        spells.append(card)
+                        break
 
     # First, fetch articles with coordinates for guaranteed terrains
     geo_articles = fetch_articles_with_coordinates(count=target_terrains + 4)
     for article in geo_articles:
         if len(terrains) >= target_terrains:
             break
+        # Skip if already in deck (by name)
+        if any(c["name"] == article["title"] for c in terrains):
+            continue
         card = build_card_from_article(article, card_type="terrain")
         terrains.append(card)
 
@@ -98,6 +134,10 @@ def generate_deck(target_size: int = 40) -> list[dict]:
         logger.error("fetch_random_articles returned no articles; deck will be incomplete")
     for article in random_articles:
         card_type = classify_article(article)
+
+        # Skip duplicates
+        if any(c["name"] == article["title"] for c in terrains + creatures + spells):
+            continue
 
         if card_type == "creature" and len(creatures) < target_creatures:
             creatures.append(build_card_from_article(article, "creature"))
@@ -133,6 +173,48 @@ def generate_deck(target_size: int = 40) -> list[dict]:
     deck = deck[:target_size]
 
     return deck
+
+
+def build_card_from_cache(card_data: dict) -> dict:
+    """Build a card dict from cached data.
+    
+    The card has AI-generated effects from the cache.
+    """
+    effects_data = card_data.get("effects_data", {})
+    card_type = card_data.get("card_type", "creature")
+    name = card_data.get("name", "Unknown")
+
+    card = {
+        "id": _make_card_id(),
+        "name": name,
+        "card_type": card_type,
+        "image": None,
+        "wiki_url": f"https://en.wikipedia.org/wiki/{name.replace(' ', '_')}",
+        "extract": "",
+        "categories": [],
+        "effects_generated": True,
+        "effect_description": effects_data.get("effect_description", "A mysterious card..."),
+        "effects": effects_data.get("effects", []),
+    }
+
+    if card_type == "creature":
+        card["attack"] = effects_data.get("attack", 2)
+        card["health"] = effects_data.get("health", 2)
+        card["max_health"] = card["health"]
+        card["mana_cost"] = effects_data.get("mana_cost", 1)
+        card["abilities"] = effects_data.get("abilities", [])
+        card["can_attack"] = False
+        card["is_tapped"] = False
+
+    elif card_type == "terrain":
+        card["mana_cost"] = 0
+        card["mana_production"] = effects_data.get("mana_production", 1)
+        card["is_tapped"] = False
+
+    elif card_type == "spell":
+        card["mana_cost"] = effects_data.get("mana_cost", 1)
+
+    return card
 
 
 def card_to_client_view(card: dict, reveal: bool = True) -> dict:
@@ -180,3 +262,87 @@ def card_to_client_view(card: dict, reveal: bool = True) -> dict:
         view["effects"] = card.get("effects", [])
 
     return view
+
+
+def generate_fresh_card(card_type: str, deck_config: dict, drawn_counts: dict) -> Optional[dict]:
+    """Generate a fresh card from Wikipedia on demand.
+    
+    Args:
+        card_type: The type of card to generate ('creature', 'terrain', 'spell')
+        deck_config: The deck configuration with target counts
+        drawn_counts: Dict tracking how many of each type have been drawn
+    
+    Returns:
+        A new card dict with AI-generated effects, or None if generation fails
+    """
+    try:
+        if card_type == 'terrain':
+            # Fetch article with coordinates for terrain
+            articles = fetch_articles_with_coordinates(count=1)
+            if not articles:
+                # Fallback to random article
+                articles = fetch_random_articles(count=1)
+        else:
+            articles = fetch_random_articles(count=1)
+        
+        if not articles:
+            return None
+        
+        article = articles[0]
+        
+        # Build card from article
+        card = build_card_from_article(article, card_type=card_type)
+        
+        # Generate AI effects
+        card = generate_card_effects(card)
+        
+        return card
+        
+    except Exception as e:
+        logger.error(f"Failed to generate fresh card: {e}")
+        return None
+
+
+def generate_card_by_type_preference(deck_config: dict, drawn_counts: dict) -> Optional[dict]:
+    """Generate a card with type chosen based on deck config and what's been drawn.
+    
+    This ensures the drawn cards match the configured ratios over time.
+    
+    Args:
+        deck_config: Dict with creature/terrain/spell target counts
+        drawn_counts: Dict with counts of each type drawn so far
+    
+    Returns:
+        A new card dict, or None if generation fails
+    """
+    # Calculate how many of each type we still "need" to draw to match config
+    creatures_needed = max(0, deck_config.get('creatures', 16) - drawn_counts.get('creature', 0))
+    terrains_needed = max(0, deck_config.get('terrains', 16) - drawn_counts.get('terrain', 0))
+    spells_needed = max(0, deck_config.get('spells', 8) - drawn_counts.get('spell', 0))
+    
+    total_needed = creatures_needed + terrains_needed + spells_needed
+    
+    if total_needed == 0:
+        # All quotas filled, pick randomly based on config ratios
+        total = sum(deck_config.values())
+        r = random.random()
+        creature_ratio = deck_config.get('creatures', 16) / total
+        terrain_ratio = deck_config.get('terrains', 16) / total
+        
+        if r < creature_ratio:
+            card_type = 'creature'
+        elif r < creature_ratio + terrain_ratio:
+            card_type = 'terrain'
+        else:
+            card_type = 'spell'
+    else:
+        # Pick type proportionally to what's still needed
+        r = random.random() * total_needed
+        if r < creatures_needed:
+            card_type = 'creature'
+        elif r < creatures_needed + terrains_needed:
+            card_type = 'terrain'
+        else:
+            card_type = 'spell'
+    
+    return generate_fresh_card(card_type, deck_config, drawn_counts)
